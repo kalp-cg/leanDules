@@ -26,9 +26,9 @@ const handleValidationErrors = (req, res, next) => {
 // User validation schemas
 const userValidation = {
   signup: [
-    body('fullName')
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Full name must be between 2 and 100 characters')
+    body('username')
+      .isLength({ min: 2, max: 50 })
+      .withMessage('Username must be between 2 and 50 characters')
       .trim(),
     
     body('email')
@@ -39,7 +39,7 @@ const userValidation = {
     body('password')
       .isLength({ min: 8 })
       .withMessage('Password must be at least 8 characters long')
-      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).*$/)
       .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
   ],
   
@@ -55,10 +55,10 @@ const userValidation = {
   ],
   
   updateProfile: [
-    body('fullName')
+    body('username')
       .optional()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Full name must be between 2 and 100 characters')
+      .isLength({ min: 2, max: 50 })
+      .withMessage('Username must be between 2 and 50 characters')
       .trim(),
     
     body('avatarUrl')
@@ -71,95 +71,61 @@ const userValidation = {
 // Question validation schemas
 const questionValidation = {
   create: [
-    body('categoryId')
+    body('content')
       .notEmpty()
-      .withMessage('Category ID is required')
-      .isInt({ min: 1 })
-      .withMessage('Category ID must be a valid integer'),
+      .withMessage('Content is required')
+      .isLength({ min: 5 })
+      .withMessage('Content must be at least 5 characters'),
     
-    body('difficultyId')
-      .notEmpty()
-      .withMessage('Difficulty ID is required')
-      .isInt({ min: 1 })
-      .withMessage('Difficulty ID must be a valid integer'),
+    body('options')
+      .isArray({ min: 2 })
+      .withMessage('At least 2 options are required'),
     
-    body('questionText')
+    body('options.*.id')
       .notEmpty()
-      .withMessage('Question text is required')
-      .isLength({ min: 10, max: 1000 })
-      .withMessage('Question text must be between 10 and 1000 characters'),
-    
-    body('optionA')
+      .withMessage('Option ID is required'),
+      
+    body('options.*.text')
       .notEmpty()
-      .withMessage('Option A is required')
-      .isLength({ min: 1, max: 500 })
-      .withMessage('Option A must be between 1 and 500 characters'),
-    
-    body('optionB')
+      .withMessage('Option text is required'),
+
+    body('correctAnswer')
       .notEmpty()
-      .withMessage('Option B is required')
-      .isLength({ min: 1, max: 500 })
-      .withMessage('Option B must be between 1 and 500 characters'),
-    
-    body('optionC')
-      .notEmpty()
-      .withMessage('Option C is required')
-      .isLength({ min: 1, max: 500 })
-      .withMessage('Option C must be between 1 and 500 characters'),
-    
-    body('optionD')
-      .notEmpty()
-      .withMessage('Option D is required')
-      .isLength({ min: 1, max: 500 })
-      .withMessage('Option D must be between 1 and 500 characters'),
-    
-    body('correctOption')
-      .notEmpty()
-      .withMessage('Correct option is required')
-      .isIn(['A', 'B', 'C', 'D'])
-      .withMessage('Correct option must be A, B, C, or D'),
+      .withMessage('Correct answer is required'),
+
+    body('difficulty')
+      .isIn(['easy', 'medium', 'hard'])
+      .withMessage('Difficulty must be easy, medium, or hard'),
+      
+    body('topicIds')
+      .optional()
+      .isArray()
+      .withMessage('Topic IDs must be an array'),
   ],
   
   update: [
-    body('categoryId')
+    body('content')
       .optional()
-      .isInt({ min: 1 })
-      .withMessage('Category ID must be a valid integer'),
+      .isLength({ min: 5 })
+      .withMessage('Content must be at least 5 characters'),
     
-    body('difficultyId')
+    body('options')
       .optional()
-      .isInt({ min: 1 })
-      .withMessage('Difficulty ID must be a valid integer'),
-    
-    body('questionText')
+      .isArray({ min: 2 })
+      .withMessage('At least 2 options are required'),
+
+    body('correctAnswer')
+      .optional(),
+
+    body('difficulty')
       .optional()
-      .isLength({ min: 10, max: 1000 })
-      .withMessage('Question text must be between 10 and 1000 characters'),
-    
-    body('optionA')
+      .isIn(['easy', 'medium', 'hard'])
+      .withMessage('Difficulty must be easy, medium, or hard'),
+      
+    body('topicIds')
       .optional()
-      .isLength({ min: 1, max: 500 })
-      .withMessage('Option A must be between 1 and 500 characters'),
-    
-    body('optionB')
-      .optional()
-      .isLength({ min: 1, max: 500 })
-      .withMessage('Option B must be between 1 and 500 characters'),
-    
-    body('optionC')
-      .optional()
-      .isLength({ min: 1, max: 500 })
-      .withMessage('Option C must be between 1 and 500 characters'),
-    
-    body('optionD')
-      .optional()
-      .isLength({ min: 1, max: 500 })
-      .withMessage('Option D must be between 1 and 500 characters'),
-    
-    body('correctOption')
-      .optional()
-      .isIn(['A', 'B', 'C', 'D'])
-      .withMessage('Correct option must be A, B, C, or D'),
+      .isArray()
+      .withMessage('Topic IDs must be an array'),
   ],
 };
 
