@@ -11,13 +11,14 @@ const { createError } = require('../middlewares/error.middleware');
  */
 async function createReport(reportData) {
   try {
-    const { reportedId, userId, reason } = reportData;
+    const { reportedId, userId, reason, type } = reportData;
 
     const report = await prisma.report.create({
       data: {
         reportedId: parseInt(reportedId),
         userId: parseInt(userId),
         reason,
+        type: type || 'inappropriate_content',
         status: 'pending',
       },
       include: {
