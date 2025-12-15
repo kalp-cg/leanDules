@@ -58,7 +58,8 @@ const duelController = {
       parseInt(req.params.duelId),
       req.userId,
       parseInt(req.params.questionId),
-      req.body.selectedOption
+      req.body.selectedOption,
+      req.body.timeTaken || 0
     );
     res.json({
       success: true,
@@ -66,7 +67,30 @@ const duelController = {
       data: result,
     });
   }),
+
+  findMatch: asyncHandler(async (req, res) => {
+    const { categoryId } = req.body;
+    const duel = await duelService.findMatch(req.userId, categoryId);
+    res.json({
+      success: true,
+      message: 'Match found and duel created',
+      data: duel,
+    });
+  }),
 };
+
+// POST /api/duels/matchmaking - Find a match
+router.post(
+  '/matchmaking',
+  authenticateToken,
+  [
+    body('categoryId')
+      .isInt({ min: 1 })
+      .withMessage('Valid category ID is required'),
+  ],
+  handleValidationErrors,
+  duelController.findMatch
+);
 
 // POST /api/duels - Create a new duel
 router.post(
