@@ -16,6 +16,22 @@ const userService = require('../services/user.service');
 
 // Placeholder controllers
 const userController = {
+  getAllUsers: asyncHandler(async (req, res) => {
+    const { page, limit, search, sortBy } = req.query;
+    const result = await userService.getAllUsers(req.userId, {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 20,
+      search,
+      sortBy,
+    });
+    res.json({
+      success: true,
+      message: 'Users retrieved successfully',
+      data: result.users,
+      pagination: result.pagination,
+    });
+  }),
+
   getProfile: asyncHandler(async (req, res) => {
     const profile = await userService.getUserProfile(req.userId);
     res.json({
@@ -92,7 +108,18 @@ const userController = {
     });
   }),
 };
-
+// GET /api/users - Get all users (for finding friends)
+router.get(
+  '/',
+  authenticateToken,
+  [
+    query('search').optional().isString(),
+    query('sortBy').optional().isIn(['newest', 'rating', 'xp']),
+    ...commonValidation.pagination,
+  ],
+  handleValidationErrors,
+  userController.getAllUsers
+);
 // GET /api/users/me - Get current user profile
 router.get('/me', authenticateToken, userController.getProfile);
 
@@ -103,6 +130,42 @@ router.put(
   userValidation.updateProfile,
   handleValidationErrors,
   userController.updateProfile
+);
+
+// GET /api/users/me/followers - Get current user's followers
+router.get(
+  '/me/followers',
+  authenticateToken,
+  [...commonValidation.pagination],
+  handleValidationErrors,
+  asyncHandler(async (req, res) => {
+    const { page = 1, limit = 20 } = req.query;
+    const result = await userService.getFollowers(req.userId, { page: parseInt(page) || 1, limit: parseInt(limit) || 20 });
+    res.json({
+      success: true,
+      message: 'Followers retrieved successfully',
+      data: result.followers,
+      pagination: result.pagination,
+    });
+  })
+);
+
+// GET /api/users/me/following - Get users current user is following
+router.get(
+  '/me/following',
+  authenticateToken,
+  [...commonValidation.pagination],
+  handleValidationErrors,
+  asyncHandler(async (req, res) => {
+    const { page = 1, limit = 20 } = req.query;
+    const result = await userService.getFollowing(req.userId, { page: parseInt(page) || 1, limit: parseInt(limit) || 20 });
+    res.json({
+      success: true,
+      message: 'Following list retrieved successfully',
+      data: result.following,
+      pagination: result.pagination,
+    });
+  })
 );
 
 // GET /api/users/search - Search users
@@ -147,9 +210,9 @@ router.post(
   userController.followUser
 );
 
-// POST /api/users/:id/unfollow - Unfollow a user
-router.post(
-  '/:id/unfollow',
+// DELETE /api/users/:id/follow - Unfollow a user
+router.delete(
+  '/:id/follow',
   authenticateToken,
   [
     param('id')
