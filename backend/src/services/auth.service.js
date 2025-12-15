@@ -4,41 +4,57 @@
  */
 
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { prisma } = require('../config/db');
 const { generateTokenPair } = require('../utils/token');
 const config = require('../config/env');
 const { createError } = require('../middlewares/error.middleware');
+const emailService = require('./email.service');
 
 /**
  * Register a new user
  */
 async function register(userData) {
-  const { fullName, email, password } = userData;
+  const { username, email, password, fullName } = userData;
 
   try {
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email },
+          { username }
+        ]
+      },
     });
 
     if (existingUser) {
-      throw createError.conflict('Email already registered');
+      if (existingUser.email === email) {
+        throw createError.conflict('Email already registered');
+      }
+      if (existingUser.username === username) {
+        throw createError.conflict('Username already taken');
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, config.BCRYPT_ROUNDS);
 
     const user = await prisma.user.create({
       data: {
-        fullName,
+        username,
         email,
         passwordHash,
+        fullName, // Save full name
       },
       select: {
         id: true,
-        fullName: true,
+        username: true,
         email: true,
+        fullName: true, // Return full name
         avatarUrl: true,
         role: true,
-        rating: true,
+        xp: true,
+        level: true,
+        reputation: true,
         createdAt: true,
       },
     });
@@ -55,6 +71,8 @@ async function register(userData) {
 
     return { user, tokens };
   } catch (error) {
+    console.error('❌ Registration error:', error);
+    console.error('Error stack:', error.stack);
     if (error.isOperational) throw error;
     throw createError.internal('Failed to create account');
   }
@@ -69,6 +87,18 @@ async function login(credentials) {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        passwordHash: true,
+        avatarUrl: true,
+        role: true,
+        xp: true,
+        level: true,
+        reputation: true,
+        createdAt: true,
+      },
     });
 
     if (!user) {
@@ -206,6 +236,94 @@ async function changePassword(userId, passwordData) {
   }
 }
 
+/**
+ * Request password reset
+ */
+async function forgotPassword(email) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // Don't reveal that user doesn't exist
+      return { success: true, message: 'If an account exists, a reset email has been sent.' };
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const passwordResetToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+
+    const passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken,
+        passwordResetExpires,
+      },
+    });
+
+    // Send email
+    await emailService.sendPasswordReset(user.email, resetToken);
+
+    return { success: true, message: 'If an account exists, a reset email has been sent.' };
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    throw createError.internal('Failed to process password reset request');
+  }
+}
+
+/**
+ * Reset password with token
+ */
+async function resetPassword(token, newPassword) {
+  try {
+    const passwordResetToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    const user = await prisma.user.findFirst({
+      where: {
+        passwordResetToken,
+        passwordResetExpires: {
+          gt: new Date(),
+        },
+      },
+    });
+
+    if (!user) {
+      throw createError.badRequest('Token is invalid or has expired');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, config.BCRYPT_ROUNDS);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetExpires: null,
+      },
+    });
+
+    // Invalidate all sessions
+    await prisma.refreshToken.deleteMany({
+      where: { userId: user.id },
+    });
+
+    return { success: true, message: 'Password has been reset successfully' };
+  } catch (error) {
+    if (error.isOperational) throw error;
+    console.error('Reset password error:', error);
+    throw createError.internal('Failed to reset password');
+  }
+}
+
 module.exports = {
   register,
   login,
@@ -213,4 +331,6 @@ module.exports = {
   logout,
   createSession,
   changePassword,
+  forgotPassword,
+  resetPassword,
 };
