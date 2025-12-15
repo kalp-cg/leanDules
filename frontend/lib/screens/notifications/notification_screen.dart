@@ -26,78 +26,367 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
     final notificationsAsync = ref.watch(notificationsProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.done_all),
-            onPressed: () async {
-              await ref.read(notificationServiceProvider).markAllAsRead();
-              ref.invalidate(notificationsProvider);
-            },
-            tooltip: 'Mark all as read',
-          ),
-        ],
-      ),
+      backgroundColor: Theme.of(context).colorScheme.background,
+      appBar: _buildAppBar(context),
       body: notificationsAsync.when(
         data: (notifications) {
           if (notifications.isEmpty) {
-            return const Center(child: Text('No notifications yet'));
+            return _buildEmptyState(context);
           }
-          return ListView.builder(
-            itemCount: notifications.length,
-            itemBuilder: (context, index) {
-              final notification = notifications[index];
-              final isRead = notification['isRead'] ?? false;
-              final type = notification['type'];
-              final data = notification['data'];
+          return _buildNotificationsList(context, notifications);
+        },
+        loading: () => _buildLoadingState(context),
+        error: (err, stack) => _buildErrorState(context, err),
+      ),
+    );
+  }
 
-              return Container(
-                color: isRead
-                    ? null
-                    : Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.05),
-                child: ListTile(
-                  leading: _buildIcon(type),
-                  title: Text(
-                    notification['message'],
-                    style: TextStyle(
-                      fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    return AppBar(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      elevation: 0,
+      centerTitle: false,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Notifications',
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 16.0),
+          child: Center(
+            child: TextButton.icon(
+              onPressed: () async {
+                await ref.read(notificationServiceProvider).markAllAsRead();
+                ref.invalidate(notificationsProvider);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('All notifications marked as read'),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.done_all_rounded, size: 18),
+              label: Text(
+                'Mark all read',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.notifications_none_rounded,
+              size: 40,
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No notifications yet',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Stay tuned! When you get notifications,\nthey\'ll appear here.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+            strokeWidth: 2.5,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Loading notifications...',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, Object error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 48,
+              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.6),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Something went wrong',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error.toString(),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () {
+                ref.invalidate(notificationsProvider);
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationsList(
+    BuildContext context,
+    List<dynamic> notifications,
+  ) {
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+      itemCount: notifications.length,
+      separatorBuilder: (context, index) => Divider(
+        height: 1,
+        indent: 16 + 56, // Icon + leading padding
+        endIndent: 16,
+        color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+      ),
+      itemBuilder: (context, index) {
+        final notification = notifications[index];
+        final isRead = notification['isRead'] ?? false;
+        final type = notification['type'];
+
+        return _buildNotificationTile(context, notification, isRead, type);
+      },
+    );
+  }
+
+  Widget _buildNotificationTile(
+    BuildContext context,
+    Map<String, dynamic> notification,
+    bool isRead,
+    String? type,
+  ) {
+    return Material(
+      color: isRead
+          ? Colors.transparent
+          : Theme.of(context).colorScheme.primary.withValues(alpha: 0.03),
+      child: InkWell(
+        onTap: () => _handleNotificationTap(notification),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon
+              Padding(
+                padding: const EdgeInsets.only(top: 4, right: 12),
+                child: _buildIcon(type),
+              ),
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Message
+                    Text(
+                      notification['message'] ?? 'Notification',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: isRead ? FontWeight.w500 : FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // Time
+                    Text(
+                      _formatDate(notification['createdAt']),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!isRead) ...[
+                const SizedBox(width: 12),
+                // Unread indicator dot
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  subtitle: Text(
-                    _formatDate(notification['createdAt']),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  onTap: () => _handleNotificationTap(notification),
                 ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildIcon(String? type) {
+    const iconSize = 24.0;
+    
     switch (type) {
-      case 'duel_invite':
-        return const CircleAvatar(
-          backgroundColor: Colors.orange,
-          child: Icon(Icons.flash_on, color: Colors.white),
+      case 'challenge':
+        return Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEE6E4D).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.flash_on_rounded,
+            color: Color(0xFFEE6E4D),
+            size: iconSize,
+          ),
+        );
+      case 'message':
+        return Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFF4A9EFF).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.chat_bubble_outline_rounded,
+            color: Color(0xFF4A9EFF),
+            size: iconSize,
+          ),
         );
       case 'follow':
-        return const CircleAvatar(
-          backgroundColor: Colors.blue,
-          child: Icon(Icons.person_add, color: Colors.white),
+        return Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFF00D084).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.person_add_rounded,
+            color: Color(0xFF00D084),
+            size: iconSize,
+          ),
+        );
+      case 'achievement':
+        return Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFFC9A227).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.emoji_events_rounded,
+            color: Color(0xFFC9A227),
+            size: iconSize,
+          ),
+        );
+      case 'leaderboard':
+        return Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFF9C27B0).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.trending_up_rounded,
+            color: Color(0xFF9C27B0),
+            size: iconSize,
+          ),
+        );
+      case 'duel_result':
+        return Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2196F3).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.sports_score_rounded,
+            color: Color(0xFF2196F3),
+            size: iconSize,
+          ),
         );
       default:
-        return const CircleAvatar(
-          backgroundColor: Colors.grey,
-          child: Icon(Icons.notifications, color: Colors.white),
+        return Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            Icons.notifications_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            size: iconSize,
+          ),
         );
     }
   }
@@ -128,51 +417,77 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
     final type = notification['type'];
     final data = notification['data'];
 
-    if (type == 'duel_invite' && data != null) {
-      _showDuelDialog(data);
+    if (type == 'challenge' && data != null) {
+      _showChallengeDialog(data);
     }
   }
 
-  void _showDuelDialog(Map<String, dynamic> data) {
+  void _showChallengeDialog(Map<String, dynamic> data) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Duel Challenge!'),
-        content: Text(
-          '${data['challengerEmail'] ?? 'Someone'} challenged you!',
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEE6E4D).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.flash_on_rounded,
+                  color: Color(0xFFEE6E4D),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Challenge Received!',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${data['challengerName'] ?? 'Someone'} challenged you to a duel',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    final socketService = ref.read(socketServiceProvider);
+                    socketService.emit('challenge:accept', {
+                      'challengeId': data['challengeId'],
+                      'challengerId': data['challengerId'],
+                    });
+                  },
+                  child: const Text('Accept Challenge'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Decline'),
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              // Decline logic if needed
-              Navigator.pop(context);
-            },
-            child: const Text('Close'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              // Accept logic
-              final socketService = ref.read(socketServiceProvider);
-              socketService.emit('duel:accept', {
-                'challengeId': data['challengeId'],
-                'challengerId': data['challengerId'],
-              });
-
-              // Wait for socket event or just navigate?
-              // The MainScreen socket listener handles 'duel:accepted' and navigates.
-              // But we might need to manually navigate if the socket event doesn't fire here?
-              // Actually, if we emit 'duel:accept', the server should emit 'duel:accepted' to us.
-              // But we are not listening to it here. MainScreen is.
-              // So if MainScreen is in the tree (it is), it should handle it.
-
-              // However, to be safe/responsive:
-              // We can show a loading indicator or wait.
-            },
-            child: const Text('Accept'),
-          ),
-        ],
       ),
     );
   }
 }
+
