@@ -102,19 +102,20 @@ const leaderboardController = {
   }),
 };
 
-// GET /api/leaderboards - Get global leaderboard
+// GET /api/leaderboard/global - Get global leaderboard
 router.get(
-  '/',
+  '/global',
   optionalAuth,
   [
     query('period')
       .optional()
+      .toUpperCase()
       .isIn(['DAILY', 'WEEKLY', 'MONTHLY', 'ALL_TIME'])
       .withMessage('Period must be DAILY, WEEKLY, MONTHLY, or ALL_TIME'),
     query('topicId')
       .optional()
-      .isUUID()
-      .withMessage('Topic ID must be a valid UUID'),
+      .isInt()
+      .withMessage('Topic ID must be a valid integer'),
     ...commonValidation.pagination,
   ],
   handleValidationErrors,
@@ -128,6 +129,7 @@ router.get(
   [
     query('period')
       .optional()
+      .toUpperCase()
       .isIn(['DAILY', 'WEEKLY', 'MONTHLY', 'ALL_TIME'])
       .withMessage('Period must be DAILY, WEEKLY, MONTHLY, or ALL_TIME'),
     ...commonValidation.pagination,
