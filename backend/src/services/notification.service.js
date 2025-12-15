@@ -9,12 +9,14 @@ const { createError } = require('../middlewares/error.middleware');
 /**
  * Create notification
  */
-async function createNotification(userId, message) {
+async function createNotification(userId, message, type = 'general', data = null) {
   try {
     const notification = await prisma.notification.create({
       data: {
         userId: parseInt(userId),
         message,
+        type,
+        data: data || {},
       },
     });
 
