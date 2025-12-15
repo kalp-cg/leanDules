@@ -35,10 +35,12 @@ async function authenticateToken(req, res, next) {
       select: {
         id: true,
         isActive: true,
-        fullName: true,
+        username: true,
         email: true,
         role: true,
-        rating: true,
+        xp: true,
+        level: true,
+        reputation: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -83,10 +85,11 @@ async function optionalAuth(req, res, next) {
           where: { id: payload.userId },
           select: {
             id: true,
-            fullName: true,
+            username: true,
             email: true,
             role: true,
-            rating: true,
+            xp: true,
+            level: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -240,6 +243,7 @@ async function requireAdmin(req, res, next) {
 
 module.exports = {
   authenticateToken,
+  authenticate: authenticateToken, // Alias for convenience
   optionalAuth,
   checkResourceOwnership,
   requireOwnership,
