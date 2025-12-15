@@ -296,7 +296,297 @@ Uses Prisma ORM. See `prisma/schema.prisma` for full schema.
 
 **Backend:** `https://learnduels-backend.onrender.com` (after deployment)  
 **GitHub:** `https://github.com/YOUR_USERNAME/learnduels-backend`
+## 🔔 Notifications System Architecture
 
+### Overview
+The notification system enables real-time delivery of user events through a combination of:
+- **REST API** for polling notifications
+- **WebSocket (Socket.IO)** for real-time push notifications
+- **PostgreSQL Database** for persistent storage
+- **Redis** for caching and high-speed lookups
+
+### Complete Notification Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      NOTIFICATION SYSTEM ARCHITECTURE                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1️⃣  EVENT TRIGGER (Backend)
+    ────────────────────────────────────────────────────────────────────────
+
+    ┌──────────────────┐
+    │  User Action     │  (Duel Started, Challenge Accepted, Message Received)
+    └────────┬─────────┘
+             │
+             ▼
+    ┌──────────────────────────────────┐
+    │  Service Layer                   │
+    │  ├─ duel.service.js              │
+    │  ├─ challenge.service.js         │
+    │  └─ chat.service.js              │
+    └────────┬─────────────────────────┘
+             │
+             ▼
+    ┌──────────────────────────────────┐
+    │  Notification Service            │
+    │  createNotification()             │
+    │  - Create DB record              │
+    │  - Prepare payload               │
+    └────────┬─────────────────────────┘
+             │
+             ├──────────────────────────┬──────────────────────────┐
+             ▼                          ▼                          ▼
+    
+2️⃣  DUAL DELIVERY CHANNELS
+    ────────────────────────────────────────────────────────────────────────
+
+    ┌──────────────────┐           ┌──────────────────────┐
+    │  REST API        │           │  WebSocket (RT)      │
+    │  (Polling)       │           │  (Push)              │
+    └────────┬─────────┘           └──────────┬───────────┘
+             │                                 │
+             ▼                                 ▼
+    ┌──────────────────┐           ┌──────────────────────┐
+    │  Database        │           │  Socket.IO Server    │
+    │  (PostgreSQL)    │           │  - Connected clients │
+    │                  │           │  - Emit 'notification'
+    │  ├─ notifications│           │  - Redis adapter     │
+    │  ├─ isRead       │           │    (clustering)      │
+    │  └─ metadata     │           └──────────────────────┘
+    └──────────────────┘
+             │
+             └──────────────────────────┐
+                                        ▼
+                            ┌──────────────────────┐
+                            │  Redis Cache         │
+                            │  ├─ Active sessions  │
+                            │  └─ User presence    │
+                            └──────────────────────┘
+
+
+3️⃣  CLIENT-SIDE RECEPTION (Frontend - Flutter)
+    ────────────────────────────────────────────────────────────────────────
+
+    ┌────────────────────────┐         ┌────────────────────────┐
+    │  Socket.IO Listener    │         │  Polling Service       │
+    │  (Real-time)           │         │  (REST API)            │
+    │                        │         │                        │
+    │  socket.on(            │         │  getNotifications()    │
+    │    'notification',     │         │  - Fetch via Dio       │
+    │    (data) => { ... }   │         │  - Parse response      │
+    │  )                     │         │  - Update UI           │
+    └────────┬───────────────┘         └────────┬───────────────┘
+             │                                   │
+             └──────────────┬────────────────────┘
+                            ▼
+    ┌────────────────────────────────────────────────┐
+    │  NotificationScreen / Home Screen              │
+    │  ├─ Display notification badge                 │
+    │  ├─ Show SnackBar alert                        │
+    │  ├─ Navigate to notifications tab              │
+    │  └─ Update notification list                   │
+    └────────────────────────────────────────────────┘
+                            ▼
+    ┌────────────────────────────────────────────────┐
+    │  User Interaction                              │
+    │  ├─ Mark as read (PUT /notifications/:id/read) │
+    │  ├─ Delete notification                        │
+    │  └─ Navigate to related content                │
+    └────────────────────────────────────────────────┘
+
+
+4️⃣  NOTIFICATION STATE MANAGEMENT
+    ────────────────────────────────────────────────────────────────────────
+
+    Initial State:
+    ┌─────────────────────────────────────────┐
+    │ {                                       │
+    │   id: 123,                              │
+    │   userId: 5,                            │
+    │   message: "User X challenged you",     │
+    │   type: "challenge",                    │
+    │   isRead: false,                        │
+    │   data: { challengeId: 789 },           │
+    │   createdAt: "2025-12-15T10:30:00Z"     │
+    │ }                                       │
+    └─────────────────────────────────────────┘
+             │
+             ▼ (User reads notification)
+    ┌─────────────────────────────────────────┐
+    │ Mark as Read (isRead: true)             │
+    │ - DB Update                             │
+    │ - Cache Invalidation                    │
+    │ - UI Update                             │
+    └─────────────────────────────────────────┘
+
+
+5️⃣  DATABASE SCHEMA
+    ────────────────────────────────────────────────────────────────────────
+
+    Table: notifications
+    ┌────────────────┬──────────────┬────────────────┐
+    │ Column         │ Type         │ Description    │
+    ├────────────────┼──────────────┼────────────────┤
+    │ id             │ INT (PK)     │ Primary Key    │
+    │ userId         │ INT (FK)     │ User Reference │
+    │ message        │ VARCHAR      │ Message text   │
+    │ type           │ VARCHAR      │ Notification   │
+    │                │              │ type           │
+    │ data           │ JSON         │ Extra data     │
+    │ isRead         │ BOOLEAN      │ Read status    │
+    │ createdAt      │ TIMESTAMP    │ Created time   │
+    │ updatedAt      │ TIMESTAMP    │ Updated time   │
+    └────────────────┴──────────────┴────────────────┘
+
+    Indexes:
+    ├─ idx_notifications_userId_createdAt
+    ├─ idx_notifications_userId_isRead
+    └─ idx_notifications_type
+
+
+6️⃣  API ENDPOINTS
+    ────────────────────────────────────────────────────────────────────────
+
+    GET /api/notifications?page=1&limit=20
+    ├─ Response:
+    │  ├─ notifications: [ {...}, {...} ]
+    │  └─ pagination: { total, page, limit, totalPages }
+    │
+    PUT /api/notifications/:id/read
+    ├─ Mark single notification as read
+    │
+    PUT /api/notifications/read-all
+    ├─ Mark all notifications as read
+    │
+    DELETE /api/notifications/:id
+    └─ Delete a notification
+
+
+7️⃣  REAL-TIME FLOW EXAMPLE (User Receives Challenge Notification)
+    ────────────────────────────────────────────────────────────────────────
+
+    Timeline:
+    
+    User A                Backend              Database            User B (Socket)
+    │                       │                      │                    │
+    │ 1. POST Challenge     │                      │                    │
+    │──────────────────────>│                      │                    │
+    │                       │ 2. Create in DB      │                    │
+    │                       │─────────────────────>│                    │
+    │                       │<─ Success ────────────                    │
+    │                       │                      │                    │
+    │                       │ 3. Create Notif      │                    │
+    │                       │─────────────────────>│                    │
+    │                       │                      │                    │
+    │                       │ 4. Check if online   │                    │
+    │                       │─────────┬────────────                    │
+    │                       │         │                                 │
+    │                       │ 5. Socket.emit() ─────────────────────────>│
+    │                       │    'notification'                         │
+    │                       │                                           │ 6. Receive
+    │                       │                                           │    Event
+    │                       │                                           │    (RT)
+    │                       │                                           │
+    │                       │ 7. SnackBar Alert <────────────────────────
+    │                       │    Navigation
+    │                       │
+    └─ Optional polling ────┘
+      (if offline):
+      After User B connects:
+      GET /api/notifications
+      Shows unread notifications
+
+
+8️⃣  NOTIFICATION TYPES
+    ────────────────────────────────────────────────────────────────────────
+
+    ├─ challenge        User challenged you to a duel
+    ├─ duel_result      Duel result notification
+    ├─ leaderboard      You climbed/dropped leaderboard
+    ├─ message          New chat message received
+    ├─ follow            New follower
+    ├─ achievement      Achievement unlocked
+    ├─ system           System announcements
+    └─ general          General notification
+
+
+9️⃣  ERROR HANDLING & RECOVERY
+    ────────────────────────────────────────────────────────────────────────
+
+    ┌──────────────────┐
+    │  Socket Missing  │ ──> User comes online later
+    │  (Offline User)  │     Server checks unread notifications
+    └──────────────────┘     Returns them via REST API
+             │
+             ▼
+    ┌──────────────────┐
+    │  Failed Socket   │ ──> Automatic Retry
+    │  Emission        │     Log error
+    └──────────────────┘     Fallback to DB
+
+    ┌──────────────────┐
+    │  Read Status Bug │ ──> Mark as read via DB
+    │  (Race Condition)│     Redis cache invalidated
+    └──────────────────┘     UI updates immediately
+
+
+🔟  PERFORMANCE OPTIMIZATIONS
+    ────────────────────────────────────────────────────────────────────────
+
+    ✅ Database Indexing
+       └─ Sorted by userId + createdAt (DESC)
+    
+    ✅ Redis Caching
+       └─ Active user sessions cached
+    
+    ✅ Socket.IO Clustering
+       └─ Multiple server instances via Redis adapter
+    
+    ✅ Lazy Loading
+       └─ Pagination (20 items per page)
+    
+    ✅ Connection Pooling
+       └─ 50 DB connections, 10 idle
+```
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Real-time Delivery** | WebSocket via Socket.IO for instant notifications |
+| **Persistent Storage** | PostgreSQL database stores all notifications |
+| **Offline Support** | Unread notifications delivered when user comes online |
+| **Read Status** | Track read/unread notifications |
+| **Pagination** | Load notifications in batches (default: 20/page) |
+| **Type Classification** | Different notification types (challenge, message, etc.) |
+| **Metadata** | Store extra data (e.g., challenge ID) with notifications |
+| **Performance** | Indexed queries, cached user sessions, clustering support |
+
+### Service Integration Points
+
+```javascript
+// Notification creation from other services
+const notificationService = require('../services/notification.service');
+
+// When challenge is created
+await notificationService.createNotification(
+  userId,
+  'User X challenged you to a duel!',
+  'challenge',
+  { challengeId: 789, challengerName: 'User X' }
+);
+
+// When message is sent
+await notificationService.createNotification(
+  recipientId,
+  'New message from User Y',
+  'message',
+  { senderId: 123, messageId: 456 }
+);
+```
+
+---
 ## 📞 Support
 
 For issues or questions:
