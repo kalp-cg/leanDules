@@ -127,7 +127,7 @@ const sensitiveLimiter = createRateLimiter({
  * 20 questions per hour
  */
 const questionCreateLimiter = createRateLimiter({
-  windowMs: 60 * 60 * 1000,
+  windowMs: 60 * 60 * 1000, 
   max: 20,
   prefix: 'rl:question:create:',
   message: {
