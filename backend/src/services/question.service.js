@@ -13,31 +13,47 @@ const { getCache, setCache, deleteCache, deleteCachePattern } = require('../conf
 async function createQuestion(questionData, authorId) {
   try {
     const {
-      categoryId,
-      difficultyId,
-      questionText,
-      optionA,
-      optionB,
-      optionC,
-      optionD,
-      correctOption,
+      topicId, // Can be single ID or array of IDs
+      topicIds: inputTopicIds, // Alternative field name
+      difficulty, // String: 'easy', 'medium', 'hard'
+      content,
+      options, // JSON array: [{id: 'A', text: '...'}, ...]
+      correctAnswer, // 'A', 'B', etc.
+      explanation,
+      type = 'mcq',
+      status = 'draft'
     } = questionData;
+
+    // Handle topic association
+    // Prefer topicIds if provided, otherwise use topicId
+    const rawTopicIds = inputTopicIds || topicId;
+    const topicIds = Array.isArray(rawTopicIds) ? rawTopicIds : [rawTopicIds];
+    
+    // Filter out any undefined/null values
+    const validTopicIds = topicIds.filter(id => id != null);
 
     const question = await prisma.question.create({
       data: {
-        categoryId: parseInt(categoryId),
-        difficultyId: parseInt(difficultyId),
+        content,
+        options,
+        correctAnswer,
+        explanation,
+        difficulty,
+        type,
+        status,
         authorId: parseInt(authorId),
-        questionText,
-        optionA,
-        optionB,
-        optionC,
-        optionD,
-        correctOption,
+        topics: {
+          create: validTopicIds.map(id => ({
+            topic: { connect: { id: parseInt(id) } }
+          }))
+        }
       },
       include: {
-        category: true,
-        difficulty: true,
+        topics: {
+          include: {
+            topic: true
+          }
+        },
         author: {
           select: {
             id: true,
@@ -48,7 +64,7 @@ async function createQuestion(questionData, authorId) {
       },
     });
 
-    // Invalidate questions cache when new question is created
+    // Invalidate questions cache
     await deleteCachePattern('questions:*');
 
     return question;
@@ -62,12 +78,12 @@ async function createQuestion(questionData, authorId) {
  * Get questions with filters
  */
 async function getQuestions(filters = {}, options = {}) {
-  const { categoryId, difficultyId } = filters;
+  const { topicId, difficulty } = filters;
   const { page = 1, limit = 20 } = options;
   const skip = (page - 1) * limit;
 
   // Try to get from cache first
-  const cacheKey = `questions:list:${categoryId || 'all'}:${difficultyId || 'all'}:${page}:${limit}`;
+  const cacheKey = `questions:list:${topicId || 'all'}:${difficulty || 'all'}:${page}:${limit}`;
   const cached = await getCache(cacheKey);
   if (cached) {
     return cached;
@@ -75,15 +91,28 @@ async function getQuestions(filters = {}, options = {}) {
 
   try {
     const where = {};
-    if (categoryId) where.categoryId = parseInt(categoryId);
-    if (difficultyId) where.difficultyId = parseInt(difficultyId);
+    
+    if (topicId) {
+      where.topics = {
+        some: {
+          topicId: parseInt(topicId)
+        }
+      };
+    }
+    
+    if (difficulty) {
+      where.difficulty = difficulty;
+    }
 
     const [questions, totalCount] = await Promise.all([
       prisma.question.findMany({
         where,
         include: {
-          category: true,
-          difficulty: true,
+          topics: {
+            include: {
+              topic: true
+            }
+          },
           author: {
             select: {
               id: true,
@@ -114,6 +143,7 @@ async function getQuestions(filters = {}, options = {}) {
 
     return result;
   } catch (error) {
+    console.error('Get questions error:', error);
     throw createError.internal('Failed to fetch questions');
   }
 }
@@ -121,13 +151,22 @@ async function getQuestions(filters = {}, options = {}) {
 /**
  * Get question by ID
  */
-async function getQuestionById(questionId) {
+async function getQuestionById(id, userId = null, includeAnswer = false) {
+  const cacheKey = `questions:${id}:${includeAnswer}`;
+  const cached = await getCache(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   try {
     const question = await prisma.question.findUnique({
-      where: { id: parseInt(questionId) },
+      where: { id: parseInt(id) },
       include: {
-        category: true,
-        difficulty: true,
+        topics: {
+          include: {
+            topic: true
+          }
+        },
         author: {
           select: {
             id: true,
@@ -141,6 +180,14 @@ async function getQuestionById(questionId) {
     if (!question) {
       throw createError.notFound('Question not found');
     }
+
+    // Hide correct answer if not requested or not authorized
+    if (!includeAnswer) {
+      delete question.correctAnswer;
+      delete question.explanation;
+    }
+
+    await setCache(cacheKey, question, 300);
 
     return question;
   } catch (error) {
@@ -167,16 +214,22 @@ async function updateQuestion(questionId, updateData, authorId) {
       throw createError.forbidden('Not authorized to update this question');
     }
 
+    const { topicId, ...rest } = updateData;
+    const data = { ...rest };
+
+    if (topicId) {
+      // Handle topic update if needed (complex, skipping for now or simple replace)
+    }
+
     const question = await prisma.question.update({
       where: { id: parseInt(questionId) },
-      data: updateData,
+      data,
       include: {
-        category: true,
-        difficulty: true,
+        topics: true,
       },
     });
 
-    // Invalidate questions cache when question is updated
+    // Invalidate questions cache
     await deleteCachePattern('questions:*');
     await deleteCache(`question:${questionId}`);
 
@@ -208,7 +261,7 @@ async function deleteQuestion(questionId, authorId) {
       where: { id: parseInt(questionId) },
     });
 
-    // Invalidate questions cache when question is deleted
+    // Invalidate questions cache
     await deleteCachePattern('questions:*');
     await deleteCache(`question:${questionId}`);
 
@@ -226,20 +279,48 @@ async function getRandomQuestions(filters = {}, count = 10) {
   try {
     const { categoryId, difficultyId } = filters;
     const where = {};
-    if (categoryId) where.categoryId = parseInt(categoryId);
-    if (difficultyId) where.difficultyId = parseInt(difficultyId);
+    
+    if (categoryId) {
+      where.topics = {
+        some: {
+          topicId: parseInt(categoryId)
+        }
+      };
+    }
+
+    if (difficultyId) {
+      // Map ID to string if necessary, or use default
+      const difficulties = ['easy', 'medium', 'hard'];
+      if (typeof difficultyId === 'number') {
+        where.difficulty = difficulties[difficultyId - 1] || 'medium';
+      } else if (typeof difficultyId === 'string') {
+        where.difficulty = difficultyId;
+      }
+    }
+
+    // Get random questions using raw query for better performance on large datasets
+    // But for now, using findMany with random skip/take or shuffle in app
+    // Since Prisma doesn't support ORDER BY RANDOM() easily across DBs
+    
+    const totalCount = await prisma.question.count({ where });
+    const take = Math.min(count * 2, totalCount);
+    const skip = Math.max(0, Math.floor(Math.random() * (totalCount - take)));
 
     const questions = await prisma.question.findMany({
       where,
-      take: count * 2, // Get more to ensure randomness
-      orderBy: { createdAt: 'desc' },
+      take: take,
+      skip: skip,
+      include: {
+        topics: true
+      }
     });
 
-    // Shuffle and return requested count
+    // Shuffle in memory
     const shuffled = questions.sort(() => 0.5 - Math.random());
     return shuffled.slice(0, count);
   } catch (error) {
-    throw createError.internal('Failed to fetch random questions');
+    console.error('Get random questions error:', error);
+    throw createError.internal(`Failed to fetch random questions: ${error.message}`);
   }
 }
 
@@ -255,21 +336,27 @@ async function searchQuestions(searchQuery, filters = {}, options = {}) {
     const where = {};
     
     if (searchQuery) {
-      where.questionText = {
+      where.content = {
         contains: searchQuery,
         mode: 'insensitive',
       };
     }
     
-    if (categoryId) where.categoryId = parseInt(categoryId);
-    if (difficultyId) where.difficultyId = parseInt(difficultyId);
+    if (categoryId) {
+      where.topics = {
+        some: {
+          topicId: parseInt(categoryId)
+        }
+      };
+    }
+    
+    if (difficultyId) where.difficulty = difficultyId;
 
     const [questions, totalCount] = await Promise.all([
       prisma.question.findMany({
         where,
         include: {
-          category: true,
-          difficulty: true,
+          topics: true,
         },
         skip,
         take: limit,
