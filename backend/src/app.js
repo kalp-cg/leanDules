@@ -12,19 +12,29 @@ const rateLimit = require('express-rate-limit');
 const config = require('./config/env');
 const { connectDatabase } = require('./config/db');
 const { connectRedis } = require('./config/redis');
+const passport = require('./config/passport');
 const { errorHandler, notFoundHandler } = require('./middlewares/error.middleware');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
-const duelRoutes = require('./routes/duel.routes');
-const categoryRoutes = require('./routes/category.routes');
+const topicRoutes = require('./routes/topics.routes');
 const questionRoutes = require('./routes/question.routes');
+const questionSetRoutes = require('./routes/questionSets.routes');
+const challengeRoutes = require('./routes/challenges.routes');
+const attemptRoutes = require('./routes/attempts.routes');
 const leaderboardRoutes = require('./routes/leaderboard.routes');
 const notificationRoutes = require('./routes/notification.routes');
-// const topicRoutes = require('./routes/topic.routes');
-// const quizRoutes = require('./routes/quiz.routes');
-// const challengeRoutes = require('./routes/challenge.routes');
+const adminRoutes = require('./routes/admin.routes');
+const recommendationRoutes = require('./routes/recommendation.routes');
+const analyticsRoutes = require('./routes/analytics.routes');
+const spectatorRoutes = require('./routes/spectator.routes');
+const gdprRoutes = require('./routes/gdpr.routes');
+const pushNotificationRoutes = require('./routes/push-notification.routes');
+const duelRoutes = require('./routes/duel.routes');
+const feedRoutes = require('./routes/feed.routes');
+const reportRoutes = require('./routes/report.routes');
+const chatRoutes = require('./routes/chat.routes');
 
 /**
  * Create Express application
@@ -35,6 +45,9 @@ function createApp() {
 
   // Trust proxy for rate limiting and IP detection
   app.set('trust proxy', 1);
+
+  // Initialize Passport
+  app.use(passport.initialize());
 
   // Security middleware
   app.use(helmet({
@@ -52,7 +65,7 @@ function createApp() {
   // CORS configuration
   app.use(cors({
     origin: config.CORS_ORIGIN,
-    credentials: true,
+    credentials: false, // Changed to false to allow wildcard origin
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   }));
@@ -60,7 +73,7 @@ function createApp() {
   // Rate limiting - OPTIMIZED for 500-700 users
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // 100 requests per 15 minutes per IP
+    max: 1000, // Increased to 1000 requests per 15 minutes per IP
     message: {
       success: false,
       message: 'Too many requests from this IP, please try again later.',
@@ -102,30 +115,44 @@ function createApp() {
       endpoints: {
         auth: '/api/auth',
         users: '/api/users',
-        duels: '/api/duels',
-        categories: '/api/categories',
+        topics: '/api/topics',
         questions: '/api/questions',
-        leaderboards: '/api/leaderboards',
+        questionSets: '/api/question-sets',
+        challenges: '/api/challenges',
+        attempts: '/api/attempts',
+        leaderboard: '/api/leaderboard',
         notifications: '/api/notifications',
-        // topics: '/api/topics',
-        // quizzes: '/api/quizzes',
-        // challenges: '/api/challenges',
+        admin: '/api/admin',
+        recommendations: '/api/recommendations',
+        analytics: '/api/analytics',
+        spectate: '/api/spectate',
+        gdpr: '/api/gdpr',
       },
       timestamp: new Date().toISOString(),
     });
   });
 
-  // API Routes
+  // API Routes - PRD Compliant
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
-  app.use('/api/duels', duelRoutes);
-  app.use('/api/categories', categoryRoutes);
+  app.use('/api/topics', topicRoutes);
   app.use('/api/questions', questionRoutes);
-  app.use('/api/leaderboards', leaderboardRoutes);
+  app.use('/api/question-sets', questionSetRoutes);
+  app.use('/api/challenges', challengeRoutes);
+  app.use('/api/attempts', attemptRoutes);
+  app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/notifications', notificationRoutes);
-  // app.use('/api/topics', topicRoutes);
-  // app.use('/api/quizzes', quizRoutes);
-  // app.use('/api/challenges', challengeRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/recommendations', recommendationRoutes);
+  app.use('/api/analytics', analyticsRoutes);
+  app.use('/api/spectate', spectatorRoutes);
+  app.use('/api/gdpr', gdprRoutes);
+  app.use('/api/duels', duelRoutes);
+  app.use('/api/feed', feedRoutes);
+  app.use('/api/reports', reportRoutes);
+  app.use('/api/chat', chatRoutes);
+  // Push notifications merged into notifications route
+  app.use('/api/notifications', pushNotificationRoutes);
 
   // 404 handler for undefined routes
   app.use(notFoundHandler);
