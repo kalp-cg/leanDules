@@ -4,11 +4,16 @@
  */
 
 const { Server } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
+const Redis = require('ioredis');
 const { verifyAccessToken } = require('../utils/token');
 const config = require('../config/env');
 
 // Import socket handlers
-const duelHandler = require('./duel.socket');
+const challengeHandler = require('./challenge.socket');
+const spectatorService = require('../services/spectator.service');
+
+let ioInstance;
 
 /**
  * Initialize Socket.IO server
@@ -16,15 +21,35 @@ const duelHandler = require('./duel.socket');
  * @returns {Object} Socket.IO server instance
  */
 function initializeSocket(server) {
+  const origin = config.SOCKET_CORS_ORIGIN || config.CORS_ORIGIN;
   const io = new Server(server, {
     cors: {
-      origin: config.SOCKET_CORS_ORIGIN || config.CORS_ORIGIN,
-      credentials: true,
+      origin: origin,
+      credentials: origin !== '*',
       methods: ['GET', 'POST'],
     },
     pingTimeout: 60000,
     pingInterval: 25000,
   });
+
+  // Redis Adapter for Clustering
+  if (process.env.REDIS_HOST || config.REDIS_URL) {
+    try {
+      const redisConfig = {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD || undefined,
+      };
+      
+      const pubClient = new Redis(redisConfig);
+      const subClient = pubClient.duplicate();
+      
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('✅ Socket.IO Redis Adapter initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize Redis Adapter:', error);
+    }
+  }
 
   // Authentication middleware
   io.use(async (socket, next) => {
@@ -37,8 +62,11 @@ function initializeSocket(server) {
 
       // Verify the JWT token
       const decoded = verifyAccessToken(token);
-      socket.userId = decoded.userId;
+      socket.userId = decoded.userId || decoded.id; // Handle both cases
       socket.userEmail = decoded.email;
+      socket.userName = decoded.fullName;
+      socket.userAvatar = decoded.avatarUrl;
+      socket.userRating = decoded.rating;
 
       console.log(`Socket authenticated: ${socket.id} (User: ${socket.userId})`);
       next();
@@ -63,13 +91,45 @@ function initializeSocket(server) {
       // Clean up mappings
       userSocketMap.delete(socket.userId);
       socketUserMap.delete(socket.id);
-      
-      // Handle any cleanup needed for duels
-      duelHandler.handleDisconnection(socket, io);
+
+      // Leave spectating if watching
+      spectatorService.leaveSpectate(socket.id);
     });
 
-    // Register duel event handlers
-    duelHandler.registerEvents(socket, io);
+    // Register challenge event handlers (PRD compliant)
+    challengeHandler.registerEvents(socket, io);
+
+    // Spectator events
+    socket.on('spectate:join', async (data) => {
+      try {
+        const { duelId } = data;
+        const duelState = await spectatorService.joinSpectate(duelId, socket.userId, socket.id);
+        
+        // Join spectator room
+        socket.join(`spectate:${duelId}`);
+        
+        // Send current state to spectator
+        socket.emit('spectate:joined', duelState);
+
+        // Notify players about new spectator
+        io.to(`duel_${duelId}`).emit('spectate:viewer_joined', {
+          spectatorCount: duelState.spectatorCount
+        });
+      } catch (error) {
+        socket.emit('spectate:error', { message: error.message });
+      }
+    });
+
+    socket.on('spectate:leave', (data) => {
+      const { duelId } = data;
+      spectatorService.leaveSpectate(socket.id);
+      socket.leave(`spectate:${duelId}`);
+      
+      // Notify about viewer leaving
+      io.to(`duel_${duelId}`).emit('spectate:viewer_left', {
+        spectatorCount: spectatorService.activeDuels.get(duelId)?.spectators.size || 0
+      });
+    });
 
     // Handle general events
     socket.on('error', (error) => {
@@ -99,7 +159,18 @@ function initializeSocket(server) {
   });
 
   console.log('✅ Socket.IO server initialized');
+  ioInstance = io;
   return io;
+}
+
+/**
+ * Get the initialized IO instance
+ */
+function getIO() {
+  if (!ioInstance) {
+    throw new Error('Socket.IO not initialized!');
+  }
+  return ioInstance;
 }
 
 // In-memory mappings (in production, use Redis)
@@ -167,6 +238,7 @@ function broadcast(io, event, data) {
 
 module.exports = {
   initializeSocket,
+  getIO,
   getUserSocketId,
   getSocketUserId,
   isUserOnline,
