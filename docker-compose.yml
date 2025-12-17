@@ -17,6 +17,9 @@ services:
       # JWT Secrets (Using dummy values for local docker - change for production)
       - JWT_SECRET=docker_dev_secret_key_123
       - JWT_REFRESH_SECRET=docker_dev_refresh_secret_key_123
+      # GitHub OAuth (Dummy values for startup - Replace with real keys for auth to work)
+      - GITHUB_CLIENT_ID=docker_dev_github_id
+      - GITHUB_CLIENT_SECRET=docker_dev_github_secret
       # CORS
       - CORS_ORIGIN=*
     depends_on:
