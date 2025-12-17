@@ -100,7 +100,7 @@ async function createDuel(player1Id, player2Id, settings = {}) {
           userId: parseInt(player2Id),
           message: `${duel.player1.fullName || 'Someone'} challenged you to a duel!`,
           type: 'duel_invite',
-          metadata: { duelId: duel.id, challengeId: challenge.id },
+          data: { duelId: duel.id, challengeId: challenge.id },
         },
       });
 
