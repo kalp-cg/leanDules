@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: learnduels-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      # Connect to the 'db' service defined below
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/learnduels_db?schema=public
+      # Connect to the 'redis' service defined below
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # JWT Secrets (Using dummy values for local docker - change for production)
+      - JWT_SECRET=docker_dev_secret_key_123
+      - JWT_REFRESH_SECRET=docker_dev_refresh_secret_key_123
+      # CORS
+      - CORS_ORIGIN=*
+    depends_on:
+      - db
+      - redis
+    networks:
+      - app-network
+    restart: always
+
+  db:
+    image: postgres:15-alpine
+    container_name: learnduels-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=learnduels_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: learnduels-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    restart: always
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
