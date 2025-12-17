@@ -34,6 +34,11 @@ class DuelNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>?>> {
       state = AsyncValue.data(data);
     });
 
+    _socketService.on('challenge:started', (data) {
+      print('Challenge started: $data');
+      state = AsyncValue.data(data);
+    });
+
     _socketService.on('duel:room_created', (data) {
       print('Room created: $data');
       _ref.read(roomCodeProvider.notifier).state = data['roomId'];
@@ -70,12 +75,8 @@ class DuelNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>?>> {
         categoryId,
       );
 
-      // 2. Send Socket Invite
-      _socketService.emit('duel:invite', {
-        'challengeId': duelData['challengeId'], // Ensure backend returns this
-        'opponentId': opponentId,
-        'settings': {'categoryId': categoryId},
-      });
+      // 2. Send Socket Invite - REMOVED
+      // The API call triggers the notification and socket event from backend.
 
       // We don't set state to data yet, we wait for acceptance or just show "Waiting..."
       // But for now, let's just keep loading or set a "waiting" state if we had one.
