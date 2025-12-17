@@ -12,8 +12,8 @@ class ApiConstants {
     // Android Emulator
     if (Platform.isAndroid) {
       // Use 10.0.2.2 for Emulator, or your local IP for physical device
-      // Current Local IP: 10.132.37.97
-      return 'http://10.132.37.97:4000/api';
+      // Current Local IP: 10.159.51.37
+      return 'http://10.159.51.37:4000/api';
     }
     // iOS Simulator / Others
     return 'http://localhost:4000/api';
