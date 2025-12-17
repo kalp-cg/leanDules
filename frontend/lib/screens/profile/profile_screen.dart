@@ -373,6 +373,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildStatCount('Solved', profile['questionsSolved'] ?? 0),
+            const SizedBox(width: 24),
+            _buildStatCount('Quizzes', profile['quizzesCompleted'] ?? 0),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCount(String label, int count) {
+    return Column(
+      children: [
+        Text(
+          count.toString(),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
       ],
     );
   }
