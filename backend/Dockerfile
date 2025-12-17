@@ -10,6 +10,9 @@ RUN apk add --no-cache openssl
 # Copy package files first to leverage cache
 COPY package*.json ./
 
+# Copy prisma directory (required for postinstall script)
+COPY prisma ./prisma/
+
 # Install dependencies
 RUN npm install
 
