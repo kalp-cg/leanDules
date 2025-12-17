@@ -9,6 +9,7 @@ import 'leaderboard/leaderboard_screen.dart';
 import 'profile/profile_screen.dart';
 import 'friends/friends_screen.dart';
 import 'duel/duel_screen.dart';
+import 'chat/general_chat_screen.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   final int initialIndex;
@@ -50,7 +51,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             label: 'View',
             onPressed: () {
               ref.read(bottomNavIndexProvider.notifier).state =
-                  2; // Navigate to notifications tab
+                  3; // Navigate to notifications tab (now Friends/Chat?)
             },
           ),
         ),
@@ -62,13 +63,17 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     // Listen for duel start (after acceptance)
     socketService.on('duel:accepted', (data) {
       if (!mounted) return;
-      // Both players receive this.
-      // The challenger already has data set in ProfileScreen.
-      // The opponent sets data in the accept callback.
-      // So we just need to navigate if not already there.
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const DuelScreen()),
+      );
+    });
 
-      // Check if we are already on DuelScreen to avoid double push
-      // This is a bit hacky, but for now:
+    // Listen for challenge start (instant duel)
+    socketService.on('challenge:started', (data) {
+      if (!mounted) return;
+      // The data is already handled by DuelProvider which updates the state.
+      // We just need to navigate.
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const DuelScreen()),
@@ -163,6 +168,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   final List<Widget> _screens = const [
     HomeScreen(),
     LeaderboardScreen(),
+    GeneralChatScreen(),
     FriendsScreen(),
     ProfileScreen(),
   ];
@@ -195,6 +201,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               icon: Icon(Icons.leaderboard_outlined),
               activeIcon: Icon(Icons.leaderboard_rounded),
               label: 'Leaderboard',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.chat_bubble_outline_rounded),
+              activeIcon: Icon(Icons.chat_bubble_rounded),
+              label: 'Chat',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.people_outline),
