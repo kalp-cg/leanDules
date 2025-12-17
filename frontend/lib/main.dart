@@ -13,6 +13,7 @@ import 'screens/duel/topic_selection_screen.dart';
 import 'screens/duel/duel_screen.dart';
 import 'screens/duel/result_screen.dart';
 import 'screens/quiz/practice_screen.dart';
+import 'screens/quiz/create_question_screen.dart';
 import 'screens/main_screen.dart';
 
 void main() async {
@@ -80,6 +81,7 @@ class LearnDuelsApp extends ConsumerWidget {
           '/leaderboard': (context) => const MainScreen(initialIndex: 1),
           '/profile': (context) => const MainScreen(initialIndex: 2),
           '/practice': (context) => const PracticeScreen(),
+          '/create-question': (context) => const CreateQuestionScreen(),
         };
 
         final builder = routes[settings.name];
