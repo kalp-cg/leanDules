@@ -55,11 +55,19 @@ async function register(userData) {
         xp: true,
         level: true,
         reputation: true,
+        rating: true, // Include rating
         createdAt: true,
       },
     });
 
-    const tokens = generateTokenPair({ userId: user.id, email: user.email });
+    const tokens = generateTokenPair({ 
+      userId: user.id, 
+      email: user.email,
+      username: user.username,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+      rating: user.rating
+    });
 
     await prisma.refreshToken.create({
       data: {
@@ -97,6 +105,7 @@ async function login(credentials) {
         xp: true,
         level: true,
         reputation: true,
+        rating: true, // Include rating
         createdAt: true,
       },
     });
@@ -110,7 +119,14 @@ async function login(credentials) {
       throw createError.unauthorized('Invalid email or password');
     }
 
-    const tokens = generateTokenPair({ userId: user.id, email: user.email });
+    const tokens = generateTokenPair({ 
+      userId: user.id, 
+      email: user.email,
+      username: user.username,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+      rating: user.rating
+    });
 
     await prisma.refreshToken.create({
       data: {
@@ -152,6 +168,10 @@ async function refreshTokens(refreshToken) {
     const tokens = generateTokenPair({
       userId: storedToken.user.id,
       email: storedToken.user.email,
+      username: storedToken.user.username,
+      fullName: storedToken.user.fullName,
+      avatarUrl: storedToken.user.avatarUrl,
+      rating: storedToken.user.rating
     });
 
     await prisma.refreshToken.delete({ where: { token: refreshToken } });
@@ -175,9 +195,16 @@ async function refreshTokens(refreshToken) {
  */
 async function logout(refreshToken) {
   try {
-    await prisma.refreshToken.delete({ where: { token: refreshToken } });
-    return { success: true };
+    if (!refreshToken) {
+      throw createError.badRequest('Refresh token is required');
+    }
+
+    // Use deleteMany to avoid throwing when token is already rotated/absent
+    const result = await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+
+    return { success: true, revoked: result.count };
   } catch (error) {
+    if (error.isOperational) throw error;
     throw createError.internal('Logout failed');
   }
 }
