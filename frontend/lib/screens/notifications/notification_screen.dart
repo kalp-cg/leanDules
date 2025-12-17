@@ -82,9 +82,9 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
               icon: const Icon(Icons.done_all_rounded, size: 18),
               label: Text(
                 'Mark all read',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -102,28 +102,34 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.notifications_none_rounded,
               size: 40,
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.4),
             ),
           ),
           const SizedBox(height: 20),
           Text(
             'No notifications yet',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
             'Stay tuned! When you get notifications,\nthey\'ll appear here.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -144,7 +150,9 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
           Text(
             'Loading notifications...',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -167,16 +175,18 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
             const SizedBox(height: 16),
             Text(
               'Something went wrong',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
               error.toString(),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 24),
@@ -221,174 +231,121 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
     bool isRead,
     String? type,
   ) {
-    return Material(
-      color: isRead
-          ? Colors.transparent
-          : Theme.of(context).colorScheme.primary.withValues(alpha: 0.03),
-      child: InkWell(
-        onTap: () => _handleNotificationTap(notification),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Icon
-              Padding(
-                padding: const EdgeInsets.only(top: 4, right: 12),
-                child: _buildIcon(type),
-              ),
-              // Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Message
-                    Text(
-                      notification['message'] ?? 'Notification',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: isRead ? FontWeight.w500 : FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurface,
+    return InkWell(
+      onTap: () => _handleNotificationTap(notification),
+      child: Container(
+        color: isRead
+            ? null
+            : Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildIcon(type),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          notification['message'] ?? 'Notification',
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(
+                                fontWeight: isRead
+                                    ? FontWeight.w400
+                                    : FontWeight.w600,
+                                height: 1.3,
+                              ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    // Time
-                    Text(
-                      _formatDate(notification['createdAt']),
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (!isRead) ...[
-                const SizedBox(width: 12),
-                // Unread indicator dot
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      shape: BoxShape.circle,
+                      if (!isRead)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8, top: 6),
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatDate(notification['createdAt']),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
-                ),
-              ],
-            ],
-          ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildIcon(String? type) {
-    const iconSize = 24.0;
-    
     switch (type) {
       case 'challenge':
-        return Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFFEE6E4D).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.flash_on_rounded,
-            color: Color(0xFFEE6E4D),
-            size: iconSize,
-          ),
+      case 'challenge_received':
+      case 'duel_invite':
+        return _buildIconContainer(
+          Icons.flash_on_rounded,
+          const Color(0xFFEE6E4D),
         );
       case 'message':
-        return Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFF4A9EFF).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.chat_bubble_outline_rounded,
-            color: Color(0xFF4A9EFF),
-            size: iconSize,
-          ),
+        return _buildIconContainer(
+          Icons.chat_bubble_outline_rounded,
+          const Color(0xFF4A9EFF),
         );
       case 'follow':
-        return Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFF00D084).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.person_add_rounded,
-            color: Color(0xFF00D084),
-            size: iconSize,
-          ),
+        return _buildIconContainer(
+          Icons.person_add_rounded,
+          const Color(0xFF00D084),
         );
       case 'achievement':
-        return Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFFC9A227).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.emoji_events_rounded,
-            color: Color(0xFFC9A227),
-            size: iconSize,
-          ),
+        return _buildIconContainer(
+          Icons.emoji_events_rounded,
+          const Color(0xFFC9A227),
         );
       case 'leaderboard':
-        return Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFF9C27B0).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.trending_up_rounded,
-            color: Color(0xFF9C27B0),
-            size: iconSize,
-          ),
+        return _buildIconContainer(
+          Icons.trending_up_rounded,
+          const Color(0xFF9C27B0),
         );
       case 'duel_result':
-        return Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2196F3).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.sports_score_rounded,
-            color: Color(0xFF2196F3),
-            size: iconSize,
-          ),
+        return _buildIconContainer(
+          Icons.sports_score_rounded,
+          const Color(0xFF2196F3),
         );
       default:
-        return Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            Icons.notifications_rounded,
-            color: Theme.of(context).colorScheme.primary,
-            size: iconSize,
-          ),
+        return _buildIconContainer(
+          Icons.notifications_rounded,
+          Theme.of(context).colorScheme.primary,
         );
     }
+  }
+
+  Widget _buildIconContainer(IconData icon, Color color) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, color: color, size: 24),
+    );
   }
 
   String _formatDate(String dateStr) {
@@ -417,7 +374,10 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
     final type = notification['type'];
     final data = notification['data'];
 
-    if (type == 'challenge' && data != null) {
+    if ((type == 'challenge' ||
+            type == 'challenge_received' ||
+            type == 'duel_invite') &&
+        data != null) {
       _showChallengeDialog(data);
     }
   }
@@ -448,16 +408,18 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
               const SizedBox(height: 24),
               Text(
                 'Challenge Received!',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               Text(
                 '${data['challengerName'] ?? 'Someone'} challenged you to a duel',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
               const SizedBox(height: 32),
@@ -490,4 +452,3 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
     );
   }
 }
-
