@@ -53,7 +53,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen> {
             final question = questions[_currentQuestionIndex];
 
             return Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.all(24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -88,9 +88,10 @@ class _DuelScreenState extends ConsumerState<DuelScreen> {
                   // Question Text
                   Text(
                     question['questionText'] ?? 'Question text missing',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       height: 1.3,
+                      fontSize: 22, // Slightly adjusted for better fit
                     ),
                   ),
                   const SizedBox(height: 40),
@@ -123,7 +124,7 @@ class _DuelScreenState extends ConsumerState<DuelScreen> {
                               color: isSelected
                                   ? Theme.of(context).colorScheme.primary
                                   : Theme.of(context).dividerColor,
-                              width: 2,
+                              width: isSelected ? 2 : 1.5,
                             ),
                             borderRadius: BorderRadius.circular(16),
                           ),
