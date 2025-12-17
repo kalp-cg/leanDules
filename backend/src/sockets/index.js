@@ -8,9 +8,11 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const Redis = require('ioredis');
 const { verifyAccessToken } = require('../utils/token');
 const config = require('../config/env');
+const { prisma } = require('../config/db');
 
 // Import socket handlers
 const challengeHandler = require('./challenge.socket');
+const chatHandler = require('./chat.socket');
 const spectatorService = require('../services/spectator.service');
 
 let ioInstance;
@@ -63,10 +65,30 @@ function initializeSocket(server) {
       // Verify the JWT token
       const decoded = verifyAccessToken(token);
       socket.userId = decoded.userId || decoded.id; // Handle both cases
-      socket.userEmail = decoded.email;
-      socket.userName = decoded.fullName;
-      socket.userAvatar = decoded.avatarUrl;
-      socket.userRating = decoded.rating;
+
+      // Populate user data (Handle both new and old tokens)
+      if (decoded.fullName || decoded.username) {
+        socket.userEmail = decoded.email;
+        socket.userName = decoded.fullName || decoded.username;
+        socket.userAvatar = decoded.avatarUrl;
+        socket.userRating = decoded.rating;
+      } else {
+        // Fallback for old tokens: Fetch from DB
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: socket.userId },
+            select: { fullName: true, username: true, email: true, avatarUrl: true, rating: true }
+          });
+          if (user) {
+            socket.userEmail = user.email;
+            socket.userName = user.fullName || user.username;
+            socket.userAvatar = user.avatarUrl;
+            socket.userRating = user.rating;
+          }
+        } catch (dbError) {
+          console.error('Failed to fetch user details for socket:', dbError);
+        }
+      }
 
       console.log(`Socket authenticated: ${socket.id} (User: ${socket.userId})`);
       next();
@@ -98,6 +120,9 @@ function initializeSocket(server) {
 
     // Register challenge event handlers (PRD compliant)
     challengeHandler.registerEvents(socket, io);
+
+    // Register chat event handlers
+    chatHandler.registerEvents(socket, io);
 
     // Spectator events
     socket.on('spectate:join', async (data) => {
