@@ -97,7 +97,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: _buildActionButton(
                       'Challenge Friend',
                       Icons.people_alt_rounded,
-                      () => ref.read(bottomNavIndexProvider.notifier).state = 2,
+                      () => ref.read(bottomNavIndexProvider.notifier).state = 3,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildActionButton(
+                      'Contribute',
+                      Icons.add_circle_outline_rounded,
+                      () => Navigator.pushNamed(context, '/create-question'),
                     ),
                   ),
                 ],
