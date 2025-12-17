@@ -7,61 +7,52 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==================== USER MANAGEMENT (PRD Compliant) ====================
-
 model User {
-  id              Int      @id @default(autoincrement())
-  username        String   @unique @db.VarChar(50)
-  fullName        String?  @map("full_name") @db.VarChar(100)
-  email           String   @unique @db.VarChar(100)
-  passwordHash    String?  @map("password_hash") @db.VarChar(255)
-  avatarUrl       String?  @map("avatar_url") @db.Text
-  bio             String?  @db.Text
-  googleId        String?  @unique @map("google_id") @db.VarChar(255)
-  githubId        String?  @unique @map("github_id") @db.VarChar(255)
-  authProvider    String   @default("email") @map("auth_provider") @db.VarChar(20)
-  role            String   @default("user") @db.VarChar(20)
-  
-  // Password Reset
-  passwordResetToken   String?   @map("password_reset_token") @db.VarChar(255)
-  passwordResetExpires DateTime? @map("password_reset_expires") @db.Timestamp
-
-  // Gamification fields (PRD)
-  xp              Int      @default(0)
-  level           Int      @default(1)
-  reputation      Int      @default(0)
-  rating          Int      @default(1200)
-  followersCount  Int      @default(0) @map("followers_count")
-  followingCount  Int      @default(0) @map("following_count")
-  
-  // Streak Tracking
-  currentStreak   Int      @default(0) @map("current_streak")
-  longestStreak   Int      @default(0) @map("longest_streak")
-  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamp
-
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp
-
-  // Relations
-  questions           Question[]
-  questionSets        QuestionSet[]
-  followers           UserFollower[]        @relation("UserFollowers")
-  following           UserFollower[]        @relation("UserFollowing")
-  challengesCreated   Challenge[]           @relation("ChallengerChallenges")
-  challengesReceived  ChallengeParticipant[]
-  attempts            Attempt[]
-  duelsAsPlayer1      Duel[]                @relation("Player1Duels")
-  duelsAsPlayer2      Duel[]                @relation("Player2Duels")
-  duelAnswers         DuelAnswer[]
-  leaderboardEntries  LeaderboardEntry[]
-  refreshTokens       RefreshToken[]
-  reports             Report[]
-  flags               Flag[]
-  notifications       Notification[]
-  activities          Activity[]
+  id                         Int                       @id @default(autoincrement())
+  isActive                   Boolean                   @default(true) @map("is_active")
+  email                      String                    @unique @db.VarChar(100)
+  passwordHash               String?                   @map("password_hash") @db.VarChar(255)
+  avatarUrl                  String?                   @map("avatar_url")
+  role                       String                    @default("user") @db.VarChar(20)
+  createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamp(6)
+  authProvider               String                    @default("email") @map("auth_provider") @db.VarChar(20)
+  bio                        String?
+  followersCount             Int                       @default(0) @map("followers_count")
+  followingCount             Int                       @default(0) @map("following_count")
+  googleId                   String?                   @unique @map("google_id") @db.VarChar(255)
+  level                      Int                       @default(1)
+  reputation                 Int                       @default(0)
+  username                   String                    @unique @db.VarChar(50)
+  xp                         Int                       @default(0)
+  currentStreak              Int                       @default(0) @map("current_streak")
+  fullName                   String?                   @map("full_name") @db.VarChar(100)
+  lastLoginAt                DateTime?                 @map("last_login_at") @db.Timestamp(6)
+  longestStreak              Int                       @default(0) @map("longest_streak")
+  rating                     Int                       @default(1200)
+  questionsSolved            Int                       @default(0) @map("questions_solved")
+  quizzesCompleted           Int                       @default(0) @map("quizzes_completed")
+  githubId                   String?                   @unique @map("github_id") @db.VarChar(255)
+  passwordResetExpires       DateTime?                 @map("password_reset_expires") @db.Timestamp(6)
+  passwordResetToken         String?                   @map("password_reset_token") @db.VarChar(255)
+  activities                 Activity[]
+  attempts                   Attempt[]
+  challengesReceived         ChallengeParticipant[]
+  challengesCreated          Challenge[]               @relation("ChallengerChallenges")
   conversationParticipations ConversationParticipant[]
+  duelAnswers                DuelAnswer[]
+  duelsAsPlayer1             Duel[]                    @relation("Player1Duels")
+  duelsAsPlayer2             Duel[]                    @relation("Player2Duels")
+  flags                      Flag[]
+  leaderboardEntries         LeaderboardEntry[]
   messagesSent               Message[]
+  notifications              Notification[]
+  questionSets               QuestionSet[]
+  questions                  Question[]
+  refreshTokens              RefreshToken[]
+  reports                    Report[]
+  followers                  UserFollower[]            @relation("UserFollowers")
+  following                  UserFollower[]            @relation("UserFollowing")
 
   @@map("users")
 }
@@ -70,118 +61,103 @@ model UserFollower {
   id          Int      @id @default(autoincrement())
   followerId  Int      @map("follower_id")
   followingId Int      @map("following_id")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp
-
-  follower  User @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  follower    User     @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@map("user_followers")
 }
 
-// ==================== TOPICS (PRD: hierarchical structure) ====================
-
 model Topic {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique @db.VarChar(100)
-  slug        String    @unique @db.VarChar(100)
-  description String?   @db.Text
-  parentId    Int?      @map("parent_id")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp
-
-  parent             Topic?              @relation("TopicHierarchy", fields: [parentId], references: [id])
-  children           Topic[]             @relation("TopicHierarchy")
-  questions          QuestionTopic[]
+  id                 Int                @id @default(autoincrement())
+  name               String             @unique @db.VarChar(100)
+  slug               String             @unique @db.VarChar(100)
+  description        String?
+  parentId           Int?               @map("parent_id")
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
   leaderboardEntries LeaderboardEntry[]
+  questions          QuestionTopic[]
+  parent             Topic?             @relation("TopicHierarchy", fields: [parentId], references: [id])
+  children           Topic[]            @relation("TopicHierarchy")
 
   @@map("topics")
 }
 
-// ==================== QUESTIONS (PRD Compliant) ====================
-
 model Question {
-  id             Int      @id @default(autoincrement())
-  authorId       Int      @map("author_id")
-  content        String   @db.Text
-  options        Json     // Array of options: [{text: "...", id: "A"}]
-  correctAnswer  String   @map("correct_answer") @db.VarChar(10)
-  explanation    String?  @db.Text
-  difficulty     String   @db.VarChar(20) // easy, medium, hard
-  type           String   @default("mcq") @db.VarChar(20)
-  timeLimit      Int      @default(30) @map("time_limit") // seconds
-  status         String   @default("draft") @db.VarChar(20) // draft, pending, published
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp
-
-  author             User                    @relation(fields: [authorId], references: [id])
-  topics             QuestionTopic[]
-  questionSetItems   QuestionSetItem[]
-  duelQuestions      DuelQuestion[]
-  flags              Flag[]
+  id               Int               @id @default(autoincrement())
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
+  authorId         Int               @map("author_id")
+  content          String
+  correctAnswer    String            @map("correct_answer") @db.VarChar(255)
+  difficulty       String            @db.VarChar(20)
+  explanation      String?
+  options          Json
+  status           String            @default("draft") @db.VarChar(20)
+  timeLimit        Int               @default(30) @map("time_limit")
+  type             String            @default("mcq") @db.VarChar(20)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
+  duelQuestions    DuelQuestion[]
+  flags            Flag[]
+  questionSetItems QuestionSetItem[]
+  topics           QuestionTopic[]
+  author           User              @relation(fields: [authorId], references: [id])
 
   @@map("questions")
 }
 
 model QuestionTopic {
-  id         Int @id @default(autoincrement())
-  questionId Int @map("question_id")
-  topicId    Int @map("topic_id")
-
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  topic    Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  id         Int      @id @default(autoincrement())
+  questionId Int      @map("question_id")
+  topicId    Int      @map("topic_id")
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  topic      Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
   @@unique([questionId, topicId])
   @@map("question_topics")
 }
 
-// ==================== QUESTION SETS (PRD: Quizzes) ====================
-
 model QuestionSet {
-  id          Int      @id @default(autoincrement())
-  name        String   @db.VarChar(200)
-  description String?  @db.Text
-  authorId    Int      @map("author_id")
-  visibility  String   @default("private") @db.VarChar(20) // private, public
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp
-
-  author     User              @relation(fields: [authorId], references: [id])
-  items      QuestionSetItem[]
-  challenges Challenge[]
-  attempts   Attempt[]
+  id          Int               @id @default(autoincrement())
+  name        String            @db.VarChar(200)
+  description String?
+  authorId    Int               @map("author_id")
+  visibility  String            @default("private") @db.VarChar(20)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
+  attempts    Attempt[]
+  challenges  Challenge[]
+  items       QuestionSetItem[]
+  author      User              @relation(fields: [authorId], references: [id])
 
   @@map("question_sets")
 }
 
 model QuestionSetItem {
-  id            Int @id @default(autoincrement())
-  questionSetId Int @map("question_set_id")
-  questionId    Int @map("question_id")
-  orderIndex    Int @map("order_index")
-
-  questionSet QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
-  question    Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  id            Int         @id @default(autoincrement())
+  questionSetId Int         @map("question_set_id")
+  questionId    Int         @map("question_id")
+  orderIndex    Int         @map("order_index")
+  question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionSet   QuestionSet @relation(fields: [questionSetId], references: [id], onDelete: Cascade)
 
   @@unique([questionSetId, questionId])
   @@map("question_set_items")
 }
 
-// ==================== CHALLENGES (PRD: Async + Instant) ====================
-
 model Challenge {
-  id            Int      @id @default(autoincrement())
-  challengerId  Int      @map("challenger_id")
-  questionSetId Int?     @map("question_set_id")
-  type          String   @db.VarChar(20) // async, instant
-  settings      Json     // {numQuestions, difficulty, timeLimit, topicIds[]}
-  status        String   @default("pending") @db.VarChar(20) // pending, active, completed, cancelled
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp
-  completedAt   DateTime? @map("completed_at") @db.Timestamp
-
-  challenger   User                   @relation("ChallengerChallenges", fields: [challengerId], references: [id])
-  questionSet  QuestionSet?           @relation(fields: [questionSetId], references: [id])
-  participants ChallengeParticipant[]
-  duel         Duel?
+  id            Int                    @id @default(autoincrement())
+  challengerId  Int                    @map("challenger_id")
+  questionSetId Int?                   @map("question_set_id")
+  type          String                 @db.VarChar(20)
+  settings      Json
+  status        String                 @default("pending") @db.VarChar(20)
+  createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamp(6)
+  completedAt   DateTime?              @map("completed_at") @db.Timestamp(6)
+  participants  ChallengeParticipant[]
+  challenger    User                   @relation("ChallengerChallenges", fields: [challengerId], references: [id])
+  questionSet   QuestionSet?           @relation(fields: [questionSetId], references: [id])
+  duel          Duel?
 
   @@map("challenges")
 }
@@ -190,66 +166,58 @@ model ChallengeParticipant {
   id          Int       @id @default(autoincrement())
   challengeId Int       @map("challenge_id")
   userId      Int       @map("user_id")
-  status      String    @default("invited") @db.VarChar(20) // invited, accepted, declined, completed
+  status      String    @default("invited") @db.VarChar(20)
   score       Int?
-  timeTaken   Int?      @map("time_taken") // seconds
-  completedAt DateTime? @map("completed_at") @db.Timestamp
-
-  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id])
+  timeTaken   Int?      @map("time_taken")
+  completedAt DateTime? @map("completed_at") @db.Timestamp(6)
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id])
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
 }
 
-// ==================== ATTEMPTS (PRD: Generic quiz attempts) ====================
-
 model Attempt {
-  id            Int       @id @default(autoincrement())
-  userId        Int       @map("user_id")
-  questionSetId Int?      @map("question_set_id")
-  challengeId   Int?      @map("challenge_id")
-  answers       Json      // [{questionId, selectedAnswer, isCorrect, timeTaken}]
+  id            Int          @id @default(autoincrement())
+  userId        Int          @map("user_id")
+  questionSetId Int?         @map("question_set_id")
+  challengeId   Int?         @map("challenge_id")
+  answers       Json
   score         Int
-  timeTaken     Int       @map("time_taken") // seconds
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp
-
-  user        User         @relation(fields: [userId], references: [id])
-  questionSet QuestionSet? @relation(fields: [questionSetId], references: [id])
+  timeTaken     Int          @map("time_taken")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  questionSet   QuestionSet? @relation(fields: [questionSetId], references: [id])
+  user          User         @relation(fields: [userId], references: [id])
 
   @@map("attempts")
 }
 
-// ==================== DUELS (PRD: Real-time instant duels) ====================
-
 model Duel {
-  id          Int       @id @default(autoincrement())
-  challengeId Int       @unique @map("challenge_id")
-  player1Id   Int       @map("player1_id")
-  player2Id   Int       @map("player2_id")
-  winnerId    Int?      @map("winner_id")
-  roomCode    String?   @unique @map("room_code") @db.VarChar(6)
-  status      String    @default("waiting") @db.VarChar(20) // waiting, active, completed
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp
-  completedAt DateTime? @map("completed_at") @db.Timestamp
-
+  id            Int            @id @default(autoincrement())
+  player1Id     Int            @map("player1_id")
+  player2Id     Int            @map("player2_id")
+  winnerId      Int?           @map("winner_id")
+  status        String         @default("waiting") @db.VarChar(20)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamp(6)
+  completedAt   DateTime?      @map("completed_at") @db.Timestamp(6)
+  challengeId   Int            @unique @map("challenge_id")
+  roomCode      String?        @unique @map("room_code") @db.VarChar(6)
+  duelAnswers   DuelAnswer[]
+  duelQuestions DuelQuestion[]
   challenge     Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   player1       User           @relation("Player1Duels", fields: [player1Id], references: [id], onDelete: Cascade)
   player2       User           @relation("Player2Duels", fields: [player2Id], references: [id], onDelete: Cascade)
-  duelQuestions DuelQuestion[]
-  duelAnswers   DuelAnswer[]
 
   @@map("duels")
 }
 
 model DuelQuestion {
-  id         Int @id @default(autoincrement())
-  duelId     Int @map("duel_id")
-  questionId Int @map("question_id")
-  orderIndex Int @map("order_index")
-
-  duel     Duel     @relation(fields: [duelId], references: [id], onDelete: Cascade)
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  id         Int      @id @default(autoincrement())
+  duelId     Int      @map("duel_id")
+  questionId Int      @map("question_id")
+  orderIndex Int      @map("order_index")
+  duel       Duel     @relation(fields: [duelId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([duelId, questionId])
   @@map("duel_questions")
@@ -260,50 +228,43 @@ model DuelAnswer {
   duelId         Int      @map("duel_id")
   playerId       Int      @map("player_id")
   questionId     Int      @map("question_id")
-  selectedAnswer String   @map("selected_answer") @db.VarChar(10)
   isCorrect      Boolean  @map("is_correct")
-  timeTaken      Int      @map("time_taken") // milliseconds
-  answeredAt     DateTime @default(now()) @map("answered_at") @db.Timestamp
-
-  duel   Duel @relation(fields: [duelId], references: [id], onDelete: Cascade)
-  player User @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  answeredAt     DateTime @default(now()) @map("answered_at") @db.Timestamp(6)
+  selectedAnswer String   @map("selected_answer") @db.VarChar(10)
+  timeTaken      Int      @map("time_taken")
+  duel           Duel     @relation(fields: [duelId], references: [id], onDelete: Cascade)
+  player         User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@map("duel_answers")
 }
 
-// ==================== LEADERBOARDS (PRD: Global + Topic-specific) ====================
-
 model LeaderboardEntry {
-  id         Int       @id @default(autoincrement())
-  userId     Int       @map("user_id")
-  topicId    Int?      @map("topic_id")
-  period     String    @db.VarChar(20) // daily, weekly, monthly, all-time
-  rating     Int       @default(0)
-  points     Int       @default(0)
-  totalDuels Int       @default(0) @map("total_duels")
-  wins       Int       @default(0)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamp
-
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topic Topic? @relation(fields: [topicId], references: [id])
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  topicId    Int?     @map("topic_id")
+  period     String   @db.VarChar(20)
+  rating     Int      @default(0)
+  points     Int      @default(0)
+  totalDuels Int      @default(0) @map("total_duels")
+  wins       Int      @default(0)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  topic      Topic?   @relation(fields: [topicId], references: [id])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, topicId, period])
   @@index([topicId, period, rating])
   @@map("leaderboard_entries")
 }
 
-// ==================== MODERATION (PRD: Flags + Reports) ====================
-
 model Flag {
   id         Int      @id @default(autoincrement())
   questionId Int      @map("question_id")
   userId     Int      @map("user_id")
-  reason     String   @db.Text
-  status     String   @default("pending") @db.VarChar(20) // pending, reviewed, resolved
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp
-
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id])
+  reason     String
+  status     String   @default("pending") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
 
   @@map("flags")
 }
@@ -312,69 +273,56 @@ model Report {
   id         Int      @id @default(autoincrement())
   reportedId Int      @map("reported_id")
   userId     Int      @map("user_id")
-  type       String   @db.VarChar(50) // user, question, inappropriate_content
-  reason     String   @db.Text
+  reason     String
   status     String   @default("pending") @db.VarChar(20)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  type       String   @db.VarChar(50)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("reports")
 }
 
-// ==================== NOTIFICATIONS ====================
-
 model Notification {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
-  type      String   @db.VarChar(50) // challenge_received, duel_invite, follow, etc
-  message   String   @db.Text
-  data      Json?    // {challengeId, userId, etc}
+  message   String
   isRead    Boolean  @default(false) @map("is_read")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  data      Json?
+  type      String   @db.VarChar(50)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
 
-// ==================== ACTIVITY FEED ====================
-
 model Activity {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
-  type      String   @db.VarChar(50) // create_quiz, won_duel, new_highscore, level_up
-  data      Json?    // Metadata (e.g. quizId, opponentId, score)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
-
+  type      String   @db.VarChar(50)
+  data      Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@map("activities")
 }
 
-// ==================== AUTHENTICATION ====================
-
 model RefreshToken {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
-  token     String   @unique @db.Text
-  expiresAt DateTime @map("expires_at") @db.Timestamp
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
 }
 
-// ==================== CHAT SYSTEM ====================
-
 model Conversation {
-  id           Int       @id @default(autoincrement())
-  type         String    @default("direct") @db.VarChar(20) // direct, group
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamp
-
+  id           Int                       @id @default(autoincrement())
+  type         String                    @default("direct") @db.VarChar(20)
+  createdAt    DateTime                  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime                  @updatedAt @map("updated_at") @db.Timestamp(6)
   participants ConversationParticipant[]
   messages     Message[]
 
@@ -382,28 +330,56 @@ model Conversation {
 }
 
 model ConversationParticipant {
-  id             Int      @id @default(autoincrement())
-  conversationId Int      @map("conversation_id")
-  userId         Int      @map("user_id")
-  joinedAt       DateTime @default(now()) @map("joined_at") @db.Timestamp
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             Int          @id @default(autoincrement())
+  conversationId Int          @map("conversation_id")
+  userId         Int          @map("user_id")
+  joinedAt       DateTime     @default(now()) @map("joined_at") @db.Timestamp(6)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
   @@map("conversation_participants")
 }
 
 model Message {
-  id             Int      @id @default(autoincrement())
-  conversationId Int      @map("conversation_id")
-  senderId       Int      @map("sender_id")
-  content        String   @db.Text
-  isRead         Boolean  @default(false) @map("is_read")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  id             Int          @id @default(autoincrement())
+  conversationId Int          @map("conversation_id")
+  senderId       Int          @map("sender_id")
+  content        String?
+  type           String       @default("text") @db.VarChar(20)
+  attachmentUrl  String?      @map("attachment_url")
+  metadata       Json?        @map("metadata")
+  replyToId      Int?         @map("reply_to_id")
+  isRead         Boolean      @default(false) @map("is_read")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyTo        Message?     @relation("ReplyTo", fields: [replyToId], references: [id])
+  replies        Message[]    @relation("ReplyTo")
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@map("messages")
+}
+
+model device_tokens {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  token      String    @unique
+  platform   String    @db.VarChar(20)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([user_id], map: "idx_device_tokens_user")
+}
+
+model user_activity {
+  id           Int       @id @default(autoincrement())
+  user_id      Int
+  date         DateTime  @db.Date
+  action_count Int?      @default(1)
+  last_action  String?   @db.VarChar(50)
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+
+  @@unique([user_id, date])
+  @@index([date], map: "idx_user_activity_date")
+  @@index([user_id, date], map: "idx_user_activity_user_date")
 }
