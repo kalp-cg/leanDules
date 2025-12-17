@@ -110,6 +110,18 @@ function createApp() {
     });
   });
 
+  // Root endpoint (Welcome message)
+  app.get('/', (req, res) => {
+    res.json({
+      success: true,
+      message: 'Welcome to LearnDuels API 🚀',
+      version: process.env.npm_package_version || '1.0.0',
+      status: 'active',
+      documentation: '/api',
+      health_check: '/health'
+    });
+  });
+
   // API Info endpoint
   app.get('/api', (req, res) => {
     res.json({
