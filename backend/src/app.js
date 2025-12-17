@@ -64,8 +64,13 @@ function createApp() {
 
   // CORS configuration
   app.use(cors({
-    origin: config.CORS_ORIGIN,
-    credentials: false, // Changed to false to allow wildcard origin
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      // Allow any origin
+      return callback(null, true);
+    },
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   }));
