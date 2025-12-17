@@ -42,7 +42,7 @@ const config = {
   // Google OAuth configuration
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-  SERVER_URL: 'http://10.132.37.122.nip.io:4000', // Forced for mobile testing
+  SERVER_URL: 'http://10.159.51.37:4000', // Updated to current local IP
   FLUTTER_DEEP_LINK_SCHEME: process.env.FLUTTER_DEEP_LINK_SCHEME || 'learn_duel_app',
 
   // Socket.IO configuration
