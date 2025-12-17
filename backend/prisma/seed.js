@@ -4,337 +4,233 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting database seed...');
+  console.log('🌱 Starting seed...');
 
-  // Clear existing data (in correct order to avoid FK constraints)
-  await prisma.notification.deleteMany();
+  // Clear existing data
+  console.log('Clearing existing data...');
   await prisma.flag.deleteMany();
-  await prisma.adminLog.deleteMany();
-  await prisma.leaderboardEntry.deleteMany();
-  await prisma.attempt.deleteMany();
-  await prisma.challengeParticipant.deleteMany();
-  await prisma.challenge.deleteMany();
-  await prisma.questionSetQuestion.deleteMany();
-  await prisma.questionSet.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.duelAnswer.deleteMany();
   await prisma.duelQuestion.deleteMany();
   await prisma.duel.deleteMany();
+  await prisma.attempt.deleteMany();
+  await prisma.challengeParticipant.deleteMany();
+  await prisma.challenge.deleteMany();
+  await prisma.questionSetItem.deleteMany();
+  await prisma.questionSet.deleteMany();
   await prisma.questionTopic.deleteMany();
   await prisma.question.deleteMany();
-  await prisma.topic.deleteMany();
+  await prisma.leaderboardEntry.deleteMany();
   await prisma.userFollower.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.report.deleteMany();
+  await prisma.topic.deleteMany();
   await prisma.user.deleteMany();
 
-  console.log('✅ Cleared existing data');
-
-  // Create users with new schema fields
+  // Create Users
+  console.log('Creating users...');
   const hashedPassword = await bcrypt.hash('password123', 10);
   
   const users = await Promise.all([
     prisma.user.create({
       data: {
-        fullName: 'Admin User',
+        username: 'admin',
         email: 'admin@learnduels.com',
         passwordHash: hashedPassword,
+        bio: 'Platform administrator',
         role: 'admin',
-        rating: 2000,
-        isActive: true,
+        xp: 10000,
+        level: 10,
+        reputation: 100,
       },
     }),
     prisma.user.create({
       data: {
-        fullName: 'John Doe',
-        email: 'john@example.com',
-        passwordHash: hashedPassword,
-        role: 'user',
-        rating: 1500,
-        isActive: true,
-      },
-    }),
-    prisma.user.create({
-      data: {
-        fullName: 'Jane Smith',
-        email: 'jane@example.com',
-        passwordHash: hashedPassword,
-        role: 'user',
-        rating: 1600,
-        isActive: true,
-      },
-    }),
-    prisma.user.create({
-      data: {
-        fullName: 'Bob Wilson',
-        email: 'bob@example.com',
-        passwordHash: hashedPassword,
-        role: 'user',
-        rating: 1400,
-        isActive: true,
-      },
-    }),
-    prisma.user.create({
-      data: {
-        fullName: 'Alice Johnson',
+        username: 'alice_wonder',
         email: 'alice@example.com',
         passwordHash: hashedPassword,
-        role: 'user',
-        rating: 1700,
-        isActive: true,
+        bio: 'Love learning new things!',
+        xp: 5000,
+        level: 5,
+        reputation: 50,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        username: 'bob_builder',
+        email: 'bob@example.com',
+        passwordHash: hashedPassword,
+        bio: 'Building knowledge brick by brick',
+        xp: 3000,
+        level: 3,
+        reputation: 30,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        username: 'charlie_chan',
+        email: 'charlie@example.com',
+        passwordHash: hashedPassword,
+        bio: 'Quiz master!',
+        xp: 7000,
+        level: 7,
+        reputation: 70,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        username: 'diana_prince',
+        email: 'diana@example.com',
+        passwordHash: hashedPassword,
+        bio: 'Learning warrior',
+        xp: 4000,
+        level: 4,
+        reputation: 40,
       },
     }),
   ]);
 
   console.log(`✅ Created ${users.length} users`);
 
-  // Create categories
-  const categories = await Promise.all([
-    prisma.category.create({ data: { name: 'Mathematics' } }),
-    prisma.category.create({ data: { name: 'Science' } }),
-    prisma.category.create({ data: { name: 'History' } }),
-    prisma.category.create({ data: { name: 'Geography' } }),
-    prisma.category.create({ data: { name: 'Programming' } }),
-    prisma.category.create({ data: { name: 'English' } }),
-  ]);
-
-  console.log(`✅ Created ${categories.length} categories`);
-
-  // Create difficulties
-  const difficulties = await Promise.all([
-    prisma.difficulty.create({ data: { level: 'Easy' } }),
-    prisma.difficulty.create({ data: { level: 'Medium' } }),
-    prisma.difficulty.create({ data: { level: 'Hard' } }),
-  ]);
-
-  console.log(`✅ Created ${difficulties.length} difficulty levels`);
-
-  // Create questions
-  const mathQuestions = [
-    {
-      categoryId: categories[0].id,
-      difficultyId: difficulties[0].id,
-      questionText: 'What is 2 + 2?',
-      optionA: '3',
-      optionB: '4',
-      optionC: '5',
-      optionD: '6',
-      correctOption: 'B',
-      authorId: users[0].id,
-    },
-    {
-      categoryId: categories[0].id,
-      difficultyId: difficulties[1].id,
-      questionText: 'What is the square root of 144?',
-      optionA: '10',
-      optionB: '11',
-      optionC: '12',
-      optionD: '13',
-      correctOption: 'C',
-      authorId: users[0].id,
-    },
-    {
-      categoryId: categories[0].id,
-      difficultyId: difficulties[2].id,
-      questionText: 'What is the derivative of x²?',
-      optionA: 'x',
-      optionB: '2x',
-      optionC: 'x²',
-      optionD: '2',
-      correctOption: 'B',
-      authorId: users[0].id,
-    },
-  ];
-
-  const scienceQuestions = [
-    {
-      categoryId: categories[1].id,
-      difficultyId: difficulties[0].id,
-      questionText: 'What is the chemical symbol for water?',
-      optionA: 'H2O',
-      optionB: 'CO2',
-      optionC: 'O2',
-      optionD: 'N2',
-      correctOption: 'A',
-      authorId: users[0].id,
-    },
-    {
-      categoryId: categories[1].id,
-      difficultyId: difficulties[1].id,
-      questionText: 'What planet is known as the Red Planet?',
-      optionA: 'Venus',
-      optionB: 'Mars',
-      optionC: 'Jupiter',
-      optionD: 'Saturn',
-      correctOption: 'B',
-      authorId: users[0].id,
-    },
-  ];
-
-  const programmingQuestions = [
-    {
-      categoryId: categories[4].id,
-      difficultyId: difficulties[1].id,
-      questionText: 'What does HTML stand for?',
-      optionA: 'Hyper Text Markup Language',
-      optionB: 'High Tech Modern Language',
-      optionC: 'Home Tool Markup Language',
-      optionD: 'Hyperlinks and Text Markup Language',
-      correctOption: 'A',
-      authorId: users[0].id,
-    },
-    {
-      categoryId: categories[4].id,
-      difficultyId: difficulties[2].id,
-      questionText: 'Which programming paradigm does JavaScript primarily support?',
-      optionA: 'Object-Oriented',
-      optionB: 'Functional',
-      optionC: 'Procedural',
-      optionD: 'All of the above',
-      correctOption: 'D',
-      authorId: users[0].id,
-    },
-  ];
-
-  const allQuestions = [...mathQuestions, ...scienceQuestions, ...programmingQuestions];
+  // Create Topics
+  console.log('Creating topics...');
   
-  const questions = await Promise.all(
-    allQuestions.map((q) => prisma.question.create({ data: q }))
-  );
+  const mathTopic = await prisma.topic.create({ data: { name: 'Mathematics', slug: 'mathematics' } });
+  const algebraTopic = await prisma.topic.create({ data: { name: 'Algebra', slug: 'algebra', parentId: mathTopic.id } });
+  const geometryTopic = await prisma.topic.create({ data: { name: 'Geometry', slug: 'geometry', parentId: mathTopic.id } });
+  const scienceTopic = await prisma.topic.create({ data: { name: 'Science', slug: 'science' } });
+  const physicsTopic = await prisma.topic.create({ data: { name: 'Physics', slug: 'physics', parentId: scienceTopic.id } });
+  const chemistryTopic = await prisma.topic.create({ data: { name: 'Chemistry', slug: 'chemistry', parentId: scienceTopic.id } });
+  const programmingTopic = await prisma.topic.create({ data: { name: 'Programming', slug: 'programming' } });
+  const javaScriptTopic = await prisma.topic.create({ data: { name: 'JavaScript', slug: 'javascript', parentId: programmingTopic.id } });
+  const historyTopic = await prisma.topic.create({ data: { name: 'History', slug: 'history' } });
+
+  console.log('✅ Created 9 topics');
+
+  // Create Questions
+  console.log('Creating questions...');
+  
+  const questions = await Promise.all([
+    prisma.question.create({
+      data: {
+        authorId: users[1].id,
+        difficulty: 'easy',
+        content: 'What is 2 + 2?',
+        options: ['3', '4', '5', '6'],
+        correctAnswer: '4',
+        explanation: '2 + 2 equals 4',
+        status: 'published',
+        topics: {
+          create: { topicId: algebraTopic.id }
+        }
+      },
+    }),
+    prisma.question.create({
+      data: {
+        authorId: users[1].id,
+        difficulty: 'medium',
+        content: 'Solve: 2x + 5 = 15',
+        options: ['5', '10', '7', '3'],
+        correctAnswer: '5',
+        explanation: 'x = 5',
+        timeLimit: 60,
+        status: 'published',
+        topics: {
+          create: { topicId: algebraTopic.id }
+        }
+      },
+    }),
+    prisma.question.create({
+      data: {
+        authorId: users[3].id,
+        difficulty: 'easy',
+        content: 'Sum of angles in triangle?',
+        options: ['90°', '180°', '270°', '360°'],
+        correctAnswer: '180°',
+        explanation: 'Always 180 degrees',
+        status: 'published',
+        topics: {
+          create: { topicId: geometryTopic.id }
+        }
+      },
+    }),
+    prisma.question.create({
+      data: {
+        authorId: users[2].id,
+        difficulty: 'medium',
+        content: 'Speed of light?',
+        options: ['300,000 km/s', '150,000 km/s', '450,000 km/s', '200,000 km/s'],
+        correctAnswer: '300,000 km/s',
+        explanation: '~300,000 km/s',
+        timeLimit: 45,
+        status: 'published',
+        topics: {
+          create: { topicId: physicsTopic.id }
+        }
+      },
+    }),
+    prisma.question.create({
+      data: {
+        authorId: users[2].id,
+        difficulty: 'easy',
+        content: 'Chemical symbol for water?',
+        options: ['H2O', 'CO2', 'O2', 'H2'],
+        correctAnswer: 'H2O',
+        explanation: 'H2O = water',
+        status: 'published',
+        topics: {
+          create: { topicId: chemistryTopic.id }
+        }
+      },
+    }),
+    prisma.question.create({
+      data: {
+        authorId: users[3].id,
+        difficulty: 'medium',
+        content: 'Declare constant in JS?',
+        options: ['var', 'let', 'const', 'constant'],
+        correctAnswer: 'const',
+        explanation: 'Use const keyword',
+        timeLimit: 45,
+        status: 'published',
+        topics: {
+          create: { topicId: javaScriptTopic.id }
+        }
+      },
+    }),
+  ]);
 
   console.log(`✅ Created ${questions.length} questions`);
 
-  // Create follow relationships
-  await Promise.all([
-    prisma.userFollower.create({
-      data: { followerId: users[1].id, followingId: users[2].id },
-    }),
-    prisma.userFollower.create({
-      data: { followerId: users[1].id, followingId: users[3].id },
-    }),
-    prisma.userFollower.create({
-      data: { followerId: users[2].id, followingId: users[1].id },
-    }),
-    prisma.userFollower.create({
-      data: { followerId: users[3].id, followingId: users[1].id },
-    }),
-    prisma.userFollower.create({
-      data: { followerId: users[4].id, followingId: users[1].id },
-    }),
-  ]);
-
-  console.log('✅ Created follow relationships');
-
-  // Create a completed duel
-  const duel = await prisma.duel.create({
-    data: {
-      player1Id: users[1].id,
-      player2Id: users[2].id,
-      winnerId: users[1].id,
-      status: 'completed',
-      completedAt: new Date(),
-    },
-  });
-
-  // Add questions to duel
-  await Promise.all(
-    questions.slice(0, 5).map((q) =>
-      prisma.duelQuestion.create({
-        data: {
-          duelId: duel.id,
-          questionId: q.id,
-        },
-      })
-    )
-  );
-
-  // Add answers
-  await Promise.all([
-    prisma.duelAnswer.create({
+  // Create Question Sets
+  const questionSets = await Promise.all([
+    prisma.questionSet.create({
       data: {
-        duelId: duel.id,
-        playerId: users[1].id,
-        questionId: questions[0].id,
-        selectedOpt: 'B',
-        isCorrect: true,
+        name: 'Basic Math Quiz',
+        authorId: users[1].id,
+        questionIds: [questions[0].id, questions[1].id, questions[2].id],
+        visibility: 'public',
       },
     }),
-    prisma.duelAnswer.create({
+    prisma.questionSet.create({
       data: {
-        duelId: duel.id,
-        playerId: users[2].id,
-        questionId: questions[0].id,
-        selectedOpt: 'A',
-        isCorrect: false,
+        name: 'Science Fundamentals',
+        authorId: users[2].id,
+        questionIds: [questions[3].id, questions[4].id],
+        visibility: 'public',
       },
     }),
   ]);
 
-  console.log('✅ Created sample duel with answers');
+  console.log(`✅ Created ${questionSets.length} question sets`);
 
-  // Create leaderboard entries
-  await Promise.all([
-    prisma.leaderboard.create({
-      data: {
-        userId: users[1].id,
-        totalDuels: 10,
-        wins: 7,
-        rating: 1500,
-      },
-    }),
-    prisma.leaderboard.create({
-      data: {
-        userId: users[2].id,
-        totalDuels: 8,
-        wins: 5,
-        rating: 1600,
-      },
-    }),
-    prisma.leaderboard.create({
-      data: {
-        userId: users[3].id,
-        totalDuels: 5,
-        wins: 2,
-        rating: 1400,
-      },
-    }),
-  ]);
-
-  console.log('✅ Created leaderboard entries');
-
-  // Create notifications
-  await Promise.all([
-    prisma.notification.create({
-      data: {
-        userId: users[1].id,
-        message: 'You won a duel against Jane Smith!',
-        isRead: false,
-      },
-    }),
-    prisma.notification.create({
-      data: {
-        userId: users[2].id,
-        message: 'John Doe challenged you to a duel!',
-        isRead: false,
-      },
-    }),
-  ]);
-
-  console.log('✅ Created notifications');
-
-  console.log('🎉 Database seeded successfully!');
-  console.log('\n📊 Summary:');
-  console.log(`   Users: ${users.length}`);
-  console.log(`   Categories: ${categories.length}`);
-  console.log(`   Questions: ${questions.length}`);
-  console.log(`   Duels: 1`);
-  console.log('\n🔑 Test Credentials:');
-  console.log('   Admin: admin@learnduels.com / password123');
-  console.log('   User: john@example.com / password123');
+  console.log('✅ Seed completed!');
+  console.log('\n🔑 Login: alice@example.com / password123');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Error seeding database:', e);
+    console.error('❌ Seed error:', e);
     process.exit(1);
   })
   .finally(async () => {
