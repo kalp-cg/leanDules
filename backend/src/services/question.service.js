@@ -28,7 +28,7 @@ async function createQuestion(questionData, authorId) {
     // Prefer topicIds if provided, otherwise use topicId
     const rawTopicIds = inputTopicIds || topicId;
     const topicIds = Array.isArray(rawTopicIds) ? rawTopicIds : [rawTopicIds];
-    
+
     // Filter out any undefined/null values
     const validTopicIds = topicIds.filter(id => id != null);
 
@@ -78,20 +78,22 @@ async function createQuestion(questionData, authorId) {
  * Get questions with filters
  */
 async function getQuestions(filters = {}, options = {}) {
-  const { topicId, difficulty } = filters;
+  const { topicId, difficulty, authorId } = filters;
   const { page = 1, limit = 20 } = options;
   const skip = (page - 1) * limit;
 
-  // Try to get from cache first
-  const cacheKey = `questions:list:${topicId || 'all'}:${difficulty || 'all'}:${page}:${limit}`;
-  const cached = await getCache(cacheKey);
-  if (cached) {
-    return cached;
+  // Try to get from cache first (skip cache if authorId filter is used for fresh data)
+  const cacheKey = `questions:list:${topicId || 'all'}:${difficulty || 'all'}:${authorId || 'all'}:${page}:${limit}`;
+  if (!authorId) {
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
   }
 
   try {
     const where = {};
-    
+
     if (topicId) {
       where.topics = {
         some: {
@@ -99,9 +101,14 @@ async function getQuestions(filters = {}, options = {}) {
         }
       };
     }
-    
+
     if (difficulty) {
       where.difficulty = difficulty;
+    }
+
+    // Filter by author
+    if (authorId) {
+      where.authorId = parseInt(authorId);
     }
 
     const [questions, totalCount] = await Promise.all([
@@ -279,7 +286,7 @@ async function getRandomQuestions(filters = {}, count = 10) {
   try {
     const { categoryId, difficultyId } = filters;
     const where = {};
-    
+
     if (categoryId) {
       where.topics = {
         some: {
@@ -301,7 +308,7 @@ async function getRandomQuestions(filters = {}, count = 10) {
     // Get random questions using raw query for better performance on large datasets
     // But for now, using findMany with random skip/take or shuffle in app
     // Since Prisma doesn't support ORDER BY RANDOM() easily across DBs
-    
+
     const totalCount = await prisma.question.count({ where });
     const take = Math.min(count * 2, totalCount);
     const skip = Math.max(0, Math.floor(Math.random() * (totalCount - take)));
@@ -334,14 +341,14 @@ async function searchQuestions(searchQuery, filters = {}, options = {}) {
 
   try {
     const where = {};
-    
+
     if (searchQuery) {
       where.content = {
         contains: searchQuery,
         mode: 'insensitive',
       };
     }
-    
+
     if (categoryId) {
       where.topics = {
         some: {
@@ -349,7 +356,7 @@ async function searchQuestions(searchQuery, filters = {}, options = {}) {
         }
       };
     }
-    
+
     if (difficultyId) where.difficulty = difficultyId;
 
     const [questions, totalCount] = await Promise.all([

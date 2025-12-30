@@ -6,6 +6,7 @@
 const { prisma } = require('../config/db');
 const { createError } = require('../middlewares/error.middleware');
 const feedService = require('./feed.service');
+const { uploadImage, deleteImage, extractPublicId } = require('../config/cloudinary');
 
 /**
  * Get all users (with pagination and search)
@@ -503,6 +504,127 @@ async function addXp(userId, amount) {
   }
 }
 
+/**
+ * Upload user avatar to Cloudinary
+ */
+async function uploadAvatar(userId, file) {
+  try {
+    // Get current user to check for existing avatar
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+      select: { avatarUrl: true },
+    });
+
+    // Delete old avatar from Cloudinary if exists
+    if (user.avatarUrl) {
+      const publicId = extractPublicId(user.avatarUrl);
+      if (publicId) {
+        try {
+          await deleteImage(publicId);
+        } catch (err) {
+          console.error('Error deleting old avatar:', err);
+        }
+      }
+    }
+
+    // Upload new avatar
+    const result = await uploadImage(file.buffer, 'avatars', `user_${userId}`);
+
+    // Update user in database
+    await prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: { avatarUrl: result.secure_url },
+    });
+
+    return result.secure_url;
+  } catch (error) {
+    console.error('Upload avatar error:', error);
+    throw createError.internal('Failed to upload avatar');
+  }
+}
+
+/**
+ * Delete user avatar
+ */
+async function deleteAvatar(userId) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+      select: { avatarUrl: true },
+    });
+
+    if (user.avatarUrl) {
+      const publicId = extractPublicId(user.avatarUrl);
+      if (publicId) {
+        await deleteImage(publicId);
+      }
+    }
+
+    await prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: { avatarUrl: null },
+    });
+  } catch (error) {
+    console.error('Delete avatar error:', error);
+    throw createError.internal('Failed to delete avatar');
+  }
+}
+
+/**
+ * Update user profile (including avatar upload)
+ */
+async function updateUserProfile(userId, data) {
+  try {
+    const { fullName, bio, username, avatarFile } = data;
+    const updateFields = {};
+
+    if (fullName !== undefined) updateFields.fullName = fullName;
+    if (bio !== undefined) updateFields.bio = bio;
+    if (username !== undefined) {
+      // Check if username is already taken
+      const existing = await prisma.user.findFirst({
+        where: {
+          username,
+          id: { not: parseInt(userId) },
+        },
+      });
+      if (existing) {
+        throw createError.badRequest('Username already taken');
+      }
+      updateFields.username = username;
+    }
+
+    // Handle avatar upload if file provided
+    if (avatarFile) {
+      const avatarUrl = await uploadAvatar(userId, avatarFile);
+      updateFields.avatarUrl = avatarUrl;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: updateFields,
+      select: {
+        id: true,
+        username: true,
+        fullName: true,
+        email: true,
+        avatarUrl: true,
+        bio: true,
+        role: true,
+        rating: true,
+        level: true,
+        xp: true,
+      },
+    });
+
+    return user;
+  } catch (error) {
+    if (error.isOperational) throw error;
+    console.error('Update profile error:', error);
+    throw createError.internal('Failed to update profile');
+  }
+}
+
 module.exports = {
   getUserProfile,
   updateProfile,
@@ -513,4 +635,7 @@ module.exports = {
   searchUsers,
   getAllUsers,
   addXp,
+  uploadAvatar,
+  deleteAvatar,
+  updateUserProfile,
 };

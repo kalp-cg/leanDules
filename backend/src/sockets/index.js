@@ -12,6 +12,7 @@ const { prisma } = require('../config/db');
 
 // Import socket handlers
 const challengeHandler = require('./challenge.socket');
+const duelHandler = require('./duel.socket');
 const chatHandler = require('./chat.socket');
 const spectatorService = require('../services/spectator.service');
 
@@ -42,10 +43,10 @@ function initializeSocket(server) {
         port: parseInt(process.env.REDIS_PORT || '6379'),
         password: process.env.REDIS_PASSWORD || undefined,
       };
-      
+
       const pubClient = new Redis(redisConfig);
       const subClient = pubClient.duplicate();
-      
+
       io.adapter(createAdapter(pubClient, subClient));
       console.log('✅ Socket.IO Redis Adapter initialized');
     } catch (error) {
@@ -57,7 +58,7 @@ function initializeSocket(server) {
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
-      
+
       if (!token) {
         return next(new Error('Authentication token required'));
       }
@@ -109,7 +110,7 @@ function initializeSocket(server) {
     // Handle disconnection
     socket.on('disconnect', (reason) => {
       console.log(`Socket disconnected: ${socket.id} (User: ${socket.userId}) - Reason: ${reason}`);
-      
+
       // Clean up mappings
       userSocketMap.delete(socket.userId);
       socketUserMap.delete(socket.id);
@@ -121,6 +122,9 @@ function initializeSocket(server) {
     // Register challenge event handlers (PRD compliant)
     challengeHandler.registerEvents(socket, io);
 
+    // Register duel event handlers
+    duelHandler.registerEvents(socket, io);
+
     // Register chat event handlers
     chatHandler.registerEvents(socket, io);
 
@@ -129,10 +133,10 @@ function initializeSocket(server) {
       try {
         const { duelId } = data;
         const duelState = await spectatorService.joinSpectate(duelId, socket.userId, socket.id);
-        
+
         // Join spectator room
         socket.join(`spectate:${duelId}`);
-        
+
         // Send current state to spectator
         socket.emit('spectate:joined', duelState);
 
@@ -149,7 +153,7 @@ function initializeSocket(server) {
       const { duelId } = data;
       spectatorService.leaveSpectate(socket.id);
       socket.leave(`spectate:${duelId}`);
-      
+
       // Notify about viewer leaving
       io.to(`duel_${duelId}`).emit('spectate:viewer_left', {
         spectatorCount: spectatorService.activeDuels.get(duelId)?.spectators.size || 0
@@ -168,7 +172,7 @@ function initializeSocket(server) {
 
     // Join user to their personal room for notifications
     socket.join(`user:${socket.userId}`);
-    
+
     // Emit connection success
     socket.emit('connected', {
       message: 'Connected to LearnDuels server',

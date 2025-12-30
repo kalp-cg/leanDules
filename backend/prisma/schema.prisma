@@ -30,11 +30,11 @@ model User {
   lastLoginAt                DateTime?                 @map("last_login_at") @db.Timestamp(6)
   longestStreak              Int                       @default(0) @map("longest_streak")
   rating                     Int                       @default(1200)
-  questionsSolved            Int                       @default(0) @map("questions_solved")
-  quizzesCompleted           Int                       @default(0) @map("quizzes_completed")
   githubId                   String?                   @unique @map("github_id") @db.VarChar(255)
   passwordResetExpires       DateTime?                 @map("password_reset_expires") @db.Timestamp(6)
   passwordResetToken         String?                   @map("password_reset_token") @db.VarChar(255)
+  questionsSolved            Int                       @default(0) @map("questions_solved")
+  quizzesCompleted           Int                       @default(0) @map("quizzes_completed")
   activities                 Activity[]
   attempts                   Attempt[]
   challengesReceived         ChallengeParticipant[]
@@ -53,8 +53,24 @@ model User {
   reports                    Report[]
   followers                  UserFollower[]            @relation("UserFollowers")
   following                  UserFollower[]            @relation("UserFollowing")
+  challengesWon              Challenge[]               @relation("WinnerChallenges")
+  savedQuestions             SavedQuestion[]
 
   @@map("users")
+}
+
+model SavedQuestion {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  questionId Int      @map("question_id")
+  savedAt    DateTime @default(now()) @map("saved_at") @db.Timestamp(6)
+  note       String?
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@map("saved_questions")
 }
 
 model UserFollower {
@@ -102,6 +118,7 @@ model Question {
   questionSetItems QuestionSetItem[]
   topics           QuestionTopic[]
   author           User              @relation(fields: [authorId], references: [id])
+  savedBy          SavedQuestion[]
 
   @@map("questions")
 }
@@ -154,6 +171,8 @@ model Challenge {
   status        String                 @default("pending") @db.VarChar(20)
   createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamp(6)
   completedAt   DateTime?              @map("completed_at") @db.Timestamp(6)
+  winnerId      Int?                   @map("winner_id")
+  winner        User?                  @relation("WinnerChallenges", fields: [winnerId], references: [id])
   participants  ChallengeParticipant[]
   challenger    User                   @relation("ChallengerChallenges", fields: [challengerId], references: [id])
   questionSet   QuestionSet?           @relation(fields: [questionSetId], references: [id])

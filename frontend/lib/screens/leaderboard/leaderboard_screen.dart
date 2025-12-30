@@ -24,13 +24,17 @@ class LeaderboardScreen extends ConsumerStatefulWidget {
   ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
 }
 
-class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
-  late Timer _refreshTimer;
+class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> with AutomaticKeepAliveClientMixin {
+  Timer? _refreshTimer;
+
+  @override
+  bool get wantKeepAlive => true; // Preserve state when switching tabs
 
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    // Reduced from 15s to 90s for better performance
+    _refreshTimer = Timer.periodic(const Duration(seconds: 90), (_) {
       if (mounted) {
         ref.invalidate(globalLeaderboardProvider);
         ref.invalidate(userRankProvider);
@@ -40,12 +44,13 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
 
   @override
   void dispose() {
-    _refreshTimer.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final leaderboardAsync = ref.watch(globalLeaderboardProvider);
     final userRankAsync = ref.watch(userRankProvider);
 
@@ -58,6 +63,8 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
           },
           color: Theme.of(context).colorScheme.primary,
           child: ListView(
+            physics: const BouncingScrollPhysics(),
+            cacheExtent: 300,
             padding: const EdgeInsets.all(24),
             children: [
               _buildHeader(),

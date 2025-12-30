@@ -10,7 +10,25 @@ const feedService = require('./feed.service');
 const userService = require('./user.service');
 const leaderboardService = require('./leaderboard.service');
 const { deleteCachePattern } = require('../config/redis');
-const { getIO, sendToUser } = require('../sockets/index');
+
+/**
+ * Transform question to match frontend expectations (Old Schema)
+ */
+/**
+ * Transform question to match frontend expectations (Unified Schema)
+ */
+function transformQuestion(q) {
+  if (q && q.content && Array.isArray(q.options)) {
+    // Return unified format: content + options array
+    return {
+      ...q,
+      questionText: q.content, // Keep alias for compatibility if needed, but prefer content
+      options: q.options, // Pass through the original options array (id, text)
+      correctOption: q.correctAnswer,
+    };
+  }
+  return q;
+}
 
 /**
  * Create a new duel
@@ -104,9 +122,10 @@ async function createDuel(player1Id, player2Id, settings = {}) {
         },
       });
 
+      const { getIO, sendToUser } = require('../sockets/index');
       const io = getIO();
       sendToUser(io, player2Id, 'notification', notification);
-      
+
       // Send event expected by frontend
       sendToUser(io, player2Id, 'duel:invitation_received', {
         duelId: duel.id,
@@ -143,7 +162,6 @@ async function getDuelById(duelId) {
             id: true,
             fullName: true,
             avatarUrl: true,
-            rating: true,
           },
         },
         player2: {
@@ -151,17 +169,11 @@ async function getDuelById(duelId) {
             id: true,
             fullName: true,
             avatarUrl: true,
-            rating: true,
           },
         },
         duelQuestions: {
           include: {
-            question: {
-              include: {
-                category: true,
-                difficulty: true,
-              },
-            },
+            question: true,
           },
         },
         duelAnswers: {
@@ -202,6 +214,7 @@ async function getDuelById(duelId) {
  */
 async function getDuelByChallengeId(challengeId) {
   try {
+    console.log(`DEBUG: Fetching duel for challengeId: ${challengeId} (type: ${typeof challengeId})`);
     const duel = await prisma.duel.findFirst({
       where: { challengeId: parseInt(challengeId) },
       include: {
@@ -210,7 +223,6 @@ async function getDuelByChallengeId(challengeId) {
             id: true,
             fullName: true,
             avatarUrl: true,
-            rating: true,
           },
         },
         player2: {
@@ -218,25 +230,22 @@ async function getDuelByChallengeId(challengeId) {
             id: true,
             fullName: true,
             avatarUrl: true,
-            rating: true,
           },
         },
         duelQuestions: {
           include: {
-            question: {
-              include: {
-                category: true,
-                difficulty: true,
-              },
-            },
+            question: true,
           },
         },
       },
     });
 
     if (!duel) {
+      console.log(`DEBUG: No duel found for challengeId: ${challengeId}`);
       return null;
     }
+
+    console.log(`DEBUG: Found duel ID: ${duel.id}. Questions count: ${duel.duelQuestions.length}`);
 
     // Transform duelQuestions to questions array
     const questions = duel.duelQuestions
@@ -280,7 +289,6 @@ async function getUserDuels(userId, options = {}) {
               id: true,
               fullName: true,
               avatarUrl: true,
-              rating: true,
             },
           },
           player2: {
@@ -288,7 +296,6 @@ async function getUserDuels(userId, options = {}) {
               id: true,
               fullName: true,
               avatarUrl: true,
-              rating: true,
             },
           },
         },
@@ -318,6 +325,9 @@ async function getUserDuels(userId, options = {}) {
  */
 async function submitAnswer(duelId, playerId, questionId, selectedOption, timeTaken = 0) {
   try {
+    // Handle skipped/null answer
+    const isSkipped = !selectedOption || selectedOption === '';
+
     // Get question to check correct answer
     const question = await prisma.question.findUnique({
       where: { id: parseInt(questionId) },
@@ -327,7 +337,8 @@ async function submitAnswer(duelId, playerId, questionId, selectedOption, timeTa
       throw createError.notFound('Question not found');
     }
 
-    const isCorrect = question.correctOption === selectedOption;
+    // Skipped answers are always wrong
+    const isCorrect = isSkipped ? false : question.correctOption === selectedOption;
 
     // Save answer
     const answer = await prisma.duelAnswer.create({
@@ -335,7 +346,7 @@ async function submitAnswer(duelId, playerId, questionId, selectedOption, timeTa
         duelId: parseInt(duelId),
         playerId: parseInt(playerId),
         questionId: parseInt(questionId),
-        selectedAnswer: selectedOption,
+        selectedAnswer: isSkipped ? 'SKIPPED' : selectedOption,
         isCorrect,
         timeTaken,
       },
@@ -347,6 +358,7 @@ async function submitAnswer(duelId, playerId, questionId, selectedOption, timeTa
     return {
       answer,
       isCorrect,
+      isSkipped,
     };
   } catch (error) {
     if (error.isOperational) throw error;
@@ -388,8 +400,8 @@ async function checkDuelCompletion(duelId) {
         player1Score > player2Score
           ? duel.player1Id
           : player2Score > player1Score
-          ? duel.player2Id
-          : null; // Tie
+            ? duel.player2Id
+            : null; // Tie
 
       await prisma.duel.update({
         where: { id: parseInt(duelId) },
@@ -404,7 +416,7 @@ async function checkDuelCompletion(duelId) {
       if (winnerId) {
         const winningScore = player1Score > player2Score ? player1Score : player2Score;
         await updateLeaderboard(winnerId, winningScore);
-        
+
         // Add to activity feed
         try {
           const opponentId = winnerId === duel.player1Id ? duel.player2Id : duel.player1Id;
@@ -478,7 +490,7 @@ async function getDuelQuestions(duelId, playerId) {
             optionB: true,
             optionC: true,
             optionD: true,
-            category: true,
+            // category: true, // removed invalid field
             difficulty: true,
           },
         },
@@ -536,7 +548,7 @@ async function findMatch(userId, categoryId) {
     });
 
     if (!opponents.length) {
-        throw createError.notFound('No opponents available');
+      throw createError.notFound('No opponents available');
     }
 
     const opponent = opponents[0];
@@ -545,7 +557,7 @@ async function findMatch(userId, categoryId) {
     // Defaulting to Medium difficulty (2) and 5 questions
     return await createDuel(userId, opponent.id, {
       categoryId,
-      difficultyId: 2, 
+      difficultyId: 2,
       questionCount: 5
     });
 
@@ -555,24 +567,6 @@ async function findMatch(userId, categoryId) {
   }
 }
 
-/**
- * Transform question to match frontend expectations (Old Schema)
- */
-function transformQuestion(q) {
-  if (q.content && Array.isArray(q.options)) {
-    const getOption = (id) => q.options.find((o) => o.id === id)?.text || '';
-    return {
-      ...q,
-      questionText: q.content,
-      optionA: getOption('A'),
-      optionB: getOption('B'),
-      optionC: getOption('C'),
-      optionD: getOption('D'),
-      correctOption: q.correctAnswer,
-    };
-  }
-  return q;
-}
 
 module.exports = {
   createDuel,

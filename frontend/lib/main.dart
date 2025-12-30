@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-// import 'dart:io';
-// import 'package:flutter_displaymode/flutter_displaymode.dart';
+import 'dart:io';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme.dart';
 import 'core/constants/api_constants.dart';
@@ -14,12 +14,17 @@ import 'screens/duel/duel_screen.dart';
 import 'screens/duel/result_screen.dart';
 import 'screens/quiz/practice_screen.dart';
 import 'screens/quiz/create_question_screen.dart';
+import 'screens/quiz/create_quiz_set_screen.dart';
 import 'screens/main_screen.dart';
+import 'screens/challenge/send_challenge_screen.dart';
+import 'screens/challenge/pending_challenges_screen.dart';
+import 'screens/admin/admin_screen.dart';
+import 'screens/feed/feed_screen.dart';
+import 'screens/onboarding/interests_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  /*
   if (!kIsWeb && Platform.isAndroid) {
     try {
       // Fetch all supported display modes
@@ -42,7 +47,6 @@ void main() async {
       debugPrint('⚠️ Failed to set high refresh rate: $e');
     }
   }
-  */
 
   debugPrint('🚀 App Starting...');
   debugPrint('🌐 kIsWeb: $kIsWeb');
@@ -82,6 +86,12 @@ class LearnDuelsApp extends ConsumerWidget {
           '/profile': (context) => const MainScreen(initialIndex: 2),
           '/practice': (context) => const PracticeScreen(),
           '/create-question': (context) => const CreateQuestionScreen(),
+          '/send-challenge': (context) => const SendChallengeScreen(),
+          '/challenges': (context) => const PendingChallengesScreen(),
+          '/admin': (context) => const AdminScreen(),
+          '/feed': (context) => const FeedScreen(),
+          '/interests': (context) => const InterestsScreen(),
+          '/create-quiz-set': (context) => const CreateQuizSetScreen(),
         };
 
         final builder = routes[settings.name];

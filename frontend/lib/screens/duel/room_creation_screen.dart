@@ -16,7 +16,6 @@ class _RoomCreationScreenState extends ConsumerState<RoomCreationScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _roomCodeController = TextEditingController();
-  bool _isCreating = false;
 
   @override
   void initState() {

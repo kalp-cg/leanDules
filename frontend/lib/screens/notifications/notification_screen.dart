@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/socket_service.dart';
-import '../../core/services/duel_service.dart';
-import '../duel/duel_screen.dart';
 
 final notificationsProvider = FutureProvider.autoDispose<List<dynamic>>((
   ref,
@@ -26,7 +24,7 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
     final notificationsAsync = ref.watch(notificationsProvider);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: _buildAppBar(context),
       body: notificationsAsync.when(
         data: (notifications) {

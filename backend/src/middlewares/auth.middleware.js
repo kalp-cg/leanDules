@@ -26,6 +26,7 @@ async function authenticateToken(req, res, next) {
     // Verify token
     const payload = verifyAccessToken(token);
     if (!payload) {
+      console.error(`DEBUG: Auth failed for token: ${token.substring(0, 10)}...`);
       return unauthorizedResponse(res, 'Invalid or expired access token');
     }
 

@@ -198,7 +198,42 @@ async function handleGoogleCallback(req, res) {
   }
 }
 
+/**
+ * Handle Google OAuth for Mobile (Native Sign-In)
+ * Route: POST /api/auth/google/mobile
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+async function handleGoogleMobileAuth(req, res) {
+  const { accessToken, idToken } = req.body;
+
+  try {
+    if (!accessToken && !idToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing Google access token or ID token',
+      });
+    }
+
+    // Process Google mobile authentication
+    const result = await googleAuthService.handleGoogleMobileAuth(accessToken, idToken);
+
+    res.json({
+      success: true,
+      message: 'Google authentication successful',
+      data: result,
+    });
+  } catch (error) {
+    console.error('Google mobile auth error:', error);
+    res.status(401).json({
+      success: false,
+      message: error.message || 'Google authentication failed',
+    });
+  }
+}
+
 module.exports = {
   getGoogleAuthUrl,
   handleGoogleCallback,
+  handleGoogleMobileAuth,
 };

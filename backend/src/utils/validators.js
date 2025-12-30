@@ -30,39 +30,39 @@ const userValidation = {
       .isLength({ min: 2, max: 50 })
       .withMessage('Username must be between 2 and 50 characters')
       .trim(),
-    
+
     body('email')
       .isEmail()
       .withMessage('Please provide a valid email address')
       .normalizeEmail(),
-    
+
     body('password')
       .isLength({ min: 8 })
       .withMessage('Password must be at least 8 characters long')
       .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).*$/)
       .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
   ],
-  
+
   login: [
     body('email')
       .isEmail()
       .withMessage('Please provide a valid email address')
       .normalizeEmail(),
-    
+
     body('password')
       .notEmpty()
       .withMessage('Password is required'),
   ],
-  
+
   updateProfile: [
     body('username')
       .optional()
       .isLength({ min: 2, max: 50 })
       .withMessage('Username must be between 2 and 50 characters')
       .trim(),
-    
+
     body('avatarUrl')
-      .optional()
+      .optional({ nullable: true, checkFalsy: true }) // Allow null, undefined, empty string
       .isURL()
       .withMessage('Avatar URL must be a valid URL'),
   ],
@@ -76,15 +76,15 @@ const questionValidation = {
       .withMessage('Content is required')
       .isLength({ min: 5 })
       .withMessage('Content must be at least 5 characters'),
-    
+
     body('options')
       .isArray({ min: 2 })
       .withMessage('At least 2 options are required'),
-    
+
     body('options.*.id')
       .notEmpty()
       .withMessage('Option ID is required'),
-      
+
     body('options.*.text')
       .notEmpty()
       .withMessage('Option text is required'),
@@ -96,19 +96,19 @@ const questionValidation = {
     body('difficulty')
       .isIn(['easy', 'medium', 'hard'])
       .withMessage('Difficulty must be easy, medium, or hard'),
-      
+
     body('topicIds')
       .optional()
       .isArray()
       .withMessage('Topic IDs must be an array'),
   ],
-  
+
   update: [
     body('content')
       .optional()
       .isLength({ min: 5 })
       .withMessage('Content must be at least 5 characters'),
-    
+
     body('options')
       .optional()
       .isArray({ min: 2 })
@@ -121,7 +121,7 @@ const questionValidation = {
       .optional()
       .isIn(['easy', 'medium', 'hard'])
       .withMessage('Difficulty must be easy, medium, or hard'),
-      
+
     body('topicIds')
       .optional()
       .isArray()
@@ -137,7 +137,7 @@ const topicValidation = {
       .withMessage('Topic name is required')
       .isLength({ min: 2, max: 100 })
       .withMessage('Topic name must be between 2 and 100 characters'),
-    
+
     body('parentId')
       .optional()
       .isUUID()
@@ -153,17 +153,17 @@ const quizValidation = {
       .withMessage('Quiz name is required')
       .isLength({ min: 3, max: 200 })
       .withMessage('Quiz name must be between 3 and 200 characters'),
-    
+
     body('questionIds')
       .isArray({ min: 1, max: 50 })
       .withMessage('Quiz must have between 1 and 50 questions'),
-    
+
     body('visibility')
       .optional()
       .isIn(['PUBLIC', 'PRIVATE'])
       .withMessage('Visibility must be PUBLIC or PRIVATE'),
   ],
-  
+
   attempt: [
     body('answers')
       .isArray()
@@ -177,32 +177,32 @@ const challengeValidation = {
     body('type')
       .isIn(['ASYNC', 'INSTANT'])
       .withMessage('Challenge type must be ASYNC or INSTANT'),
-    
+
     body('opponentId')
       .optional()
       .isUUID()
       .withMessage('Opponent ID must be a valid UUID'),
-    
+
     body('settings')
       .isObject()
       .withMessage('Settings must be an object'),
-    
+
     body('settings.topicId')
       .optional()
       .isUUID()
       .withMessage('Topic ID must be a valid UUID'),
-    
+
     body('settings.difficulty')
       .optional()
       .isIn(['EASY', 'MEDIUM', 'HARD'])
       .withMessage('Difficulty must be EASY, MEDIUM, or HARD'),
-    
+
     body('settings.questionCount')
       .optional()
       .isInt({ min: 1, max: 20 })
       .withMessage('Question count must be between 1 and 20'),
   ],
-  
+
   accept: [
     param('id')
       .isUUID()
@@ -217,13 +217,13 @@ const commonValidation = {
       .isUUID()
       .withMessage('ID must be a valid UUID'),
   ],
-  
+
   pagination: [
     query('page')
       .optional()
       .isInt({ min: 1 })
       .withMessage('Page must be a positive integer'),
-    
+
     query('limit')
       .optional()
       .isInt({ min: 1, max: 100 })
@@ -240,7 +240,7 @@ function sanitizeInput(input) {
   if (typeof input !== 'string') {
     return input;
   }
-  
+
   return input
     .trim()
     .replace(/[<>]/g, '') // Remove potential HTML tags

@@ -11,7 +11,8 @@ import '../../core/services/friend_service.dart';
 import '../../providers/user_provider.dart';
 
 class GeneralChatScreen extends ConsumerStatefulWidget {
-  const GeneralChatScreen({super.key});
+  final String? initialMessage;
+  const GeneralChatScreen({super.key, this.initialMessage});
 
   @override
   ConsumerState<GeneralChatScreen> createState() => _GeneralChatScreenState();
@@ -32,6 +33,9 @@ class _GeneralChatScreenState extends ConsumerState<GeneralChatScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialMessage != null) {
+      _messageController.text = widget.initialMessage!;
+    }
     _socketService = ref.read(socketServiceProvider);
     _initSocket();
     _messageController.addListener(_onTextChanged);
@@ -230,7 +234,7 @@ class _GeneralChatScreenState extends ConsumerState<GeneralChatScreen> {
     final userAsync = ref.watch(userProfileProvider);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
@@ -279,7 +283,7 @@ class _GeneralChatScreenState extends ConsumerState<GeneralChatScreen> {
                   ),
                   color: Theme.of(
                     context,
-                  ).colorScheme.primaryContainer.withOpacity(0.3),
+                  ).colorScheme.primaryContainer.withValues(alpha: 0.3),
                   child: Row(
                     children: [
                       Icon(
@@ -601,7 +605,7 @@ class _GeneralChatScreenState extends ConsumerState<GeneralChatScreen> {
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                             border: Border(
                               left: BorderSide(
@@ -691,7 +695,7 @@ class _GeneralChatScreenState extends ConsumerState<GeneralChatScreen> {
                                   ? Colors.black.withValues(alpha: 0.2)
                                   : Theme.of(
                                       context,
-                                    ).colorScheme.surfaceVariant,
+                                    ).colorScheme.surfaceContainerHighest,
                               fontFamily: 'monospace',
                               fontSize: 14,
                             ),
@@ -700,7 +704,7 @@ class _GeneralChatScreenState extends ConsumerState<GeneralChatScreen> {
                                   ? Colors.black.withValues(alpha: 0.2)
                                   : Theme.of(
                                       context,
-                                    ).colorScheme.surfaceVariant,
+                                    ).colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
@@ -749,7 +753,7 @@ class _GeneralChatScreenState extends ConsumerState<GeneralChatScreen> {
                 padding: const EdgeInsets.all(8),
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceVariant,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                   border: Border(
                     left: BorderSide(
@@ -802,7 +806,7 @@ class _GeneralChatScreenState extends ConsumerState<GeneralChatScreen> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.background,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
                         color: Theme.of(

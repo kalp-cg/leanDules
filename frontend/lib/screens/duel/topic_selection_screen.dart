@@ -406,12 +406,14 @@ class _TopicSelectionScreenState extends ConsumerState<TopicSelectionScreen> {
           Navigator.pop(context); // Go back to friends list
         }
       } else {
-        // Quick Match Mode
-        await ref
+        // Quick Match Mode (Socket Queue)
+        ref
             .read(duelStateProvider.notifier)
-            .startDuel(selectedCategoryId!);
+            .joinQueue(selectedCategoryId!);
+            
+        // Wait a bit or Just Navigate - DuelScreen will show waiting state
         if (mounted) {
-          Navigator.pushNamed(context, '/duel');
+           Navigator.pushNamed(context, '/duel');
         }
       }
     } catch (e) {

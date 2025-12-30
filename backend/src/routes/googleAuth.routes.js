@@ -38,4 +38,14 @@ router.get('/url', googleAuthController.getGoogleAuthUrl);
  */
 router.get('/callback', googleAuthController.handleGoogleCallback);
 
+/**
+ * @route   POST /api/auth/google/mobile
+ * @desc    Handle Google OAuth for mobile (native Google Sign-In)
+ * @access  Public
+ * @body    {string} accessToken - Google access token from native sign-in
+ * @body    {string} idToken - Google ID token from native sign-in
+ * @returns {Object} { success: true, data: { user, accessToken, refreshToken } }
+ */
+router.post('/mobile', googleAuthController.handleGoogleMobileAuth);
+
 module.exports = router;

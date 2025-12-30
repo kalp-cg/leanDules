@@ -122,6 +122,15 @@ function createApp() {
     });
   });
 
+  // Temporary route for token generation
+  app.get('/api/test/token', (req, res) => {
+    const { generateAccessToken } = require('./utils/token');
+    const id = parseInt(req.query.id) || 1;
+    // Standard test users
+    const emails = { 1: 'ashwani@gmail.com', 2: 'akshar@gmail.com' };
+    res.json({ token: generateAccessToken({ userId: id, email: emails[id] || `test${id}@example.com` }) });
+  });
+
   // API Info endpoint
   app.get('/api', (req, res) => {
     res.json({

@@ -26,17 +26,17 @@ class CustomButton extends StatelessWidget {
           colors: backgroundColor != null
               ? [backgroundColor!, backgroundColor!]
               : [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+                  Theme.of(context).primaryColor,
+                  Theme.of(context).primaryColor, // Flat color preferred for playful style, or subtle gradient
                 ],
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(100), // Pill shape
         boxShadow: [
           BoxShadow(
-            color: (backgroundColor ?? Theme.of(context).colorScheme.primary)
-                .withValues(alpha: 0.4),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: (backgroundColor ?? Theme.of(context).primaryColor)
+                .withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -44,11 +44,9 @@ class CustomButton extends StatelessWidget {
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
-          foregroundColor: textColor ?? Theme.of(context).colorScheme.onPrimary,
+          foregroundColor: textColor ?? Colors.white,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(vertical: 16),
         ),
         child: isLoading

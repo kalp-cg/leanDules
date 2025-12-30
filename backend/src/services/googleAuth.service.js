@@ -250,9 +250,56 @@ async function handleGoogleCallback(code) {
   }
 }
 
+/**
+ * Handle Google Mobile Authentication (Native Sign-In)
+ * @param {string} accessToken - Google access token
+ * @param {string} idToken - Google ID token
+ * @returns {Promise<Object>} User and tokens
+ */
+async function handleGoogleMobileAuth(accessToken, idToken) {
+  try {
+    // Get user info from Google using the provided tokens
+    const googleUser = await getGoogleUserInfo(idToken, accessToken);
+
+    // Find or create user in our database
+    const user = await findOrCreateGoogleUser(googleUser);
+
+    // Generate our JWT tokens
+    const jwtAccessToken = generateJWT(user);
+    const refreshToken = generateRefreshToken(user);
+
+    // Store refresh token in database
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      },
+    });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        rating: user.rating,
+        role: user.role,
+      },
+      accessToken: jwtAccessToken,
+      refreshToken,
+    };
+  } catch (error) {
+    console.error('Error in handleGoogleMobileAuth:', error);
+    throw new Error('Failed to authenticate with Google');
+  }
+}
+
 module.exports = {
   getGoogleAuthUrl,
   handleGoogleCallback,
+  handleGoogleMobileAuth,
   getGoogleTokens,
   getGoogleUserInfo,
   findOrCreateGoogleUser,

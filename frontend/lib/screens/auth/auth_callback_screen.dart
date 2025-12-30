@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthCallbackScreen extends ConsumerStatefulWidget {
-  const AuthCallbackScreen({Key? key}) : super(key: key);
+  const AuthCallbackScreen({super.key});
 
   @override
   ConsumerState<AuthCallbackScreen> createState() => _AuthCallbackScreenState();
@@ -27,9 +27,9 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
       final accessToken = state.uri.queryParameters['access_token'];
       final refreshToken = state.uri.queryParameters['refresh_token'];
 
-      print('🔍 Full URI: ${state.uri}');
-      print('🔑 Access Token: ${accessToken?.substring(0, 20)}...');
-      print('🔑 Refresh Token: ${refreshToken?.substring(0, 20)}...');
+      debugPrint('🔍 Full URI: ${state.uri}');
+      debugPrint('🔑 Access Token: ${accessToken?.substring(0, 20)}...');
+      debugPrint('🔑 Refresh Token: ${refreshToken?.substring(0, 20)}...');
 
       if (accessToken == null || refreshToken == null) {
         throw Exception('Tokens not found in URL');
@@ -40,7 +40,7 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
       await prefs.setString('accessToken', accessToken);
       await prefs.setString('refreshToken', refreshToken);
 
-      print('✅ Tokens saved successfully');
+      debugPrint('✅ Tokens saved successfully');
 
       // Small delay to ensure storage is complete
       await Future.delayed(const Duration(milliseconds: 500));
@@ -50,7 +50,7 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
         context.go('/home');
       }
     } catch (e) {
-      print('❌ Error handling auth callback: $e');
+      debugPrint('❌ Error handling auth callback: $e');
 
       // Show error and go back to login
       if (mounted) {

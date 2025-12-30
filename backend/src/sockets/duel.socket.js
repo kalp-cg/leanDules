@@ -14,11 +14,39 @@ const activeRooms = new Map(); // roomId -> room data
 const userRooms = new Map(); // userId -> roomId
 
 // Helper functions for State Management (Redis or Memory)
+// Helper functions for State Management (Redis or Memory)
 async function getRoom(roomId) {
   const client = getRedisClient();
   if (!client) return activeRooms.get(roomId);
-  const data = await client.get(`room:${roomId}`);
-  return data ? JSON.parse(data) : null;
+
+  // Use HGETALL to get all fields
+  const data = await client.hgetall(`room:${roomId}`);
+  if (!data || Object.keys(data).length === 0) return null;
+
+  // Reconstruct room object
+  const room = data.metadata ? JSON.parse(data.metadata) : {};
+
+  // Reconstruct answers
+  room.answers = {};
+  Object.keys(data).forEach(key => {
+    if (key.startsWith('answers:')) {
+      const userId = key.split(':')[1];
+      try {
+        room.answers[userId] = JSON.parse(data[key]);
+      } catch (e) { room.answers[userId] = {}; }
+    }
+  });
+
+  // Reconstruct scores
+  room.scores = {};
+  Object.keys(data).forEach(key => {
+    if (key.startsWith('score:')) {
+      const userId = key.split(':')[1];
+      room.scores[userId] = parseInt(data[key]) || 0;
+    }
+  });
+
+  return room;
 }
 
 function generateRoomId() {
@@ -27,9 +55,69 @@ function generateRoomId() {
 
 async function setRoom(roomId, data) {
   const client = getRedisClient();
-  if (!client) return activeRooms.set(roomId, data);
-  // Set with 1 hour expiry to prevent stale data
-  await client.set(`room:${roomId}`, JSON.stringify(data), 'EX', 3600);
+  if (!client) {
+    activeRooms.set(roomId, data);
+    return;
+  }
+
+  // Split data into hash fields
+  const { answers, scores, ...metadata } = data;
+
+  const pipeline = client.pipeline();
+  pipeline.hset(`room:${roomId}`, 'metadata', JSON.stringify(metadata));
+
+  // Save answers if present (initial setup)
+  if (answers) {
+    Object.keys(answers).forEach(uid => {
+      pipeline.hset(`room:${roomId}`, `answers:${uid}`, JSON.stringify(answers[uid]));
+    });
+  }
+
+  // Save scores if present (initial setup)
+  if (scores) {
+    Object.keys(scores).forEach(uid => {
+      pipeline.hset(`room:${roomId}`, `score:${uid}`, scores[uid]);
+    });
+  }
+
+  // Set expiry (24 hours)
+  pipeline.expire(`room:${roomId}`, 86400);
+
+  await pipeline.exec();
+}
+
+// Atomic helper for answer submission
+async function saveUserAnswer(roomId, userId, answerData) {
+  const client = getRedisClient();
+  if (!client) {
+    const room = activeRooms.get(roomId);
+    if (!room) return;
+    if (!room.answers[userId]) room.answers[userId] = {};
+    Object.assign(room.answers[userId], answerData);
+    return;
+  }
+
+  // Get current answers for user to merge (serialized per user)
+  const currentStr = await client.hget(`room:${roomId}`, `answers:${userId}`);
+  const current = currentStr ? JSON.parse(currentStr) : {};
+
+  // Merge new answer
+  Object.assign(current, answerData);
+
+  // Save back
+  await client.hset(`room:${roomId}`, `answers:${userId}`, JSON.stringify(current));
+  // Not strictly atomic R-M-W, but safe per-user
+}
+
+// Atomic helper for score update
+async function incrementUserScore(roomId, userId, points) {
+  const client = getRedisClient();
+  if (!client) {
+    const room = activeRooms.get(roomId);
+    if (room) room.scores[userId] = (room.scores[userId] || 0) + points;
+    return (room.scores[userId] || 0);
+  }
+  return await client.hincrby(`room:${roomId}`, `score:${userId}`, points);
 }
 
 async function deleteRoom(roomId) {
@@ -39,21 +127,27 @@ async function deleteRoom(roomId) {
 }
 
 async function getUserRoom(userId) {
+  const userIdStr = String(userId); // Ensure consistent type
   const client = getRedisClient();
-  if (!client) return userRooms.get(userId);
-  return await client.get(`user_room:${userId}`);
+  if (!client) return userRooms.get(userIdStr);
+  const roomId = await client.get(`user_room:${userIdStr}`);
+  console.log(`DEBUG: getUserRoom(${userIdStr}) = ${roomId}`);
+  return roomId;
 }
 
 async function setUserRoom(userId, roomId) {
+  const userIdStr = String(userId); // Ensure consistent type
+  console.log(`DEBUG: setUserRoom(${userIdStr}, ${roomId})`);
   const client = getRedisClient();
-  if (!client) return userRooms.set(userId, roomId);
-  await client.set(`user_room:${userId}`, roomId, 'EX', 3600);
+  if (!client) return userRooms.set(userIdStr, roomId);
+  await client.set(`user_room:${userIdStr}`, roomId, 'EX', 3600);
 }
 
 async function deleteUserRoom(userId) {
+  const userIdStr = String(userId); // Ensure consistent type
   const client = getRedisClient();
-  if (!client) return userRooms.delete(userId);
-  await client.del(`user_room:${userId}`);
+  if (!client) return userRooms.delete(userIdStr);
+  await client.del(`user_room:${userIdStr}`);
 }
 
 /**
@@ -66,7 +160,7 @@ function registerEvents(socket, io) {
   socket.on('duel:create_room', async (data) => {
     try {
       const { categoryId, difficultyId } = data;
-      
+
       let roomId;
       let attempts = 0;
       do {
@@ -77,7 +171,7 @@ function registerEvents(socket, io) {
       } while (attempts < 5);
 
       if (attempts >= 5) {
-         throw new Error('Failed to generate unique room ID');
+        throw new Error('Failed to generate unique room ID');
       }
 
       const roomData = {
@@ -135,27 +229,29 @@ function registerEvents(socket, io) {
 
       // Create actual duel in DB
       const duel = await duelService.createDuel(hostId, opponentId, room.settings);
-      
+
       // Update Duel with Room Code in DB
       await duelService.updateDuelRoomCode(duel.id, roomId);
-      
+
       // Update room with duel data
       room.status = 'active';
       room.duelId = duel.id;
       room.currentQuestion = 0;
       room.scores = { [hostId]: 0, [opponentId]: 0 };
       room.answers = { [hostId]: {}, [opponentId]: {} };
+      room.playerProgress = { [hostId]: 0, [opponentId]: 0 }; // Track individual progress
       room.questions = duel.questions; // Store questions in room
-      
+
       await setRoom(roomId, room); // Save updated room
 
       // Notify both players
       io.to(roomId).emit('duel:started', {
         duelId: duel.id,
+        roomId: roomId, // CRITICAL: Frontend needs this for socket answer submission
         questions: duel.questions,
         players: {
-            [hostId]: { id: hostId }, 
-            [opponentId]: { id: opponentId }
+          [hostId]: { id: hostId },
+          [opponentId]: { id: opponentId }
         }
       });
 
@@ -169,7 +265,7 @@ function registerEvents(socket, io) {
   socket.on('duel:invite', async (data) => {
     try {
       const { challengeId, opponentId, settings } = data;
-      
+
       // Send invitation to opponent
       const invitationData = {
         challengeId,
@@ -193,7 +289,7 @@ function registerEvents(socket, io) {
 
       // Send to user's room (works across cluster with Redis Adapter)
       io.to(`user:${opponentId}`).emit('duel:invitation_received', invitationData);
-      
+
       socket.emit('duel:invitation_sent', {
         challengeId,
         opponentId,
@@ -212,7 +308,7 @@ function registerEvents(socket, io) {
   socket.on('duel:accept', async (data) => {
     try {
       const { challengeId, challengerId } = data;
-      
+
       // 1. Generate Unique 6-Digit Room ID
       let roomId;
       let attempts = 0;
@@ -224,32 +320,32 @@ function registerEvents(socket, io) {
       } while (attempts < 5);
 
       if (attempts >= 5) {
-         socket.emit('duel:error', { error: 'Failed to generate room ID' });
-         return;
+        socket.emit('duel:error', { error: 'Failed to generate room ID' });
+        return;
       }
 
       // 2. Create/Fetch Duel Record in Database
       // We need to ensure the duel exists in DB before starting
       // The challengeId passed here might be the 'challenge' table ID.
       // We need to check if a 'duel' record already exists for this challenge.
-      
+
       // Note: In our current flow, the frontend calls createDuelChallenge API first,
       // which calls duelService.createDuel, which creates Challenge AND Duel records.
       // So the Duel record SHOULD already exist.
-      
+
       // Let's verify the duel exists and get its details (questions etc)
       // We can use duelService to fetch it or just trust the flow.
       // To be safe and robust, let's fetch the duel to get the questions to store in Redis.
-      
+
       // However, duelService.createDuel returns the duel with questions.
       // If we don't have the questions here, we need to fetch them.
-      
+
       // Let's assume we need to fetch the duel by challengeId
       const duel = await duelService.getDuelByChallengeId(challengeId);
-      
+
       if (!duel) {
-         socket.emit('duel:error', { error: 'Duel not found in database' });
-         return;
+        socket.emit('duel:error', { error: 'Duel not found in database' });
+        return;
       }
 
       // Update Duel with Room Code in DB
@@ -258,7 +354,7 @@ function registerEvents(socket, io) {
       // 3. Create Room Data in Redis (if not exists)
       // We use setRoom with NX (not exist) logic implicitly by checking getRoom first
       let roomData = await getRoom(roomId);
-      
+
       if (!roomData) {
         roomData = {
           id: roomId,
@@ -279,6 +375,10 @@ function registerEvents(socket, io) {
             [challengerId]: {},
             [socket.userId]: {},
           },
+          playerProgress: {
+            [challengerId]: 0,
+            [socket.userId]: 0,
+          },
           questions: duel.questions || [], // Store questions in Redis for quick access
         };
         await setRoom(roomId, roomData);
@@ -288,9 +388,11 @@ function registerEvents(socket, io) {
       await setUserRoom(challengerId, roomId);
       await setUserRoom(socket.userId, roomId);
 
+      console.log(`DEBUG: duel:accept challengeId: ${challengeId}, challengerId: ${challengerId}, roomId: ${roomId}`);
+
       // 5. Join Room
       socket.join(roomId);
-      
+
       // Request challenger to join (if on another node)
       io.to(`user:${challengerId}`).emit('duel:join_room_request', { roomId });
 
@@ -305,8 +407,9 @@ function registerEvents(socket, io) {
         timestamp: new Date().toISOString(),
       };
 
+      console.log(`DEBUG: Emitting duel:started to room ${roomId} and user ${challengerId}`);
       io.to(roomId).emit('duel:started', startPayload);
-      
+
       // Redundant emit to ensure challenger gets it (if not in room yet)
       io.to(`user:${challengerId}`).emit('duel:started', startPayload);
 
@@ -343,10 +446,10 @@ function registerEvents(socket, io) {
     }
   });
 
-  // Submit answer
+  // Submit answer - ASYNC FLOW: Player advances immediately, no waiting for opponent
   socket.on('duel:submit_answer', async (data) => {
     try {
-      const { challengeId, questionIndex, answer, timeUsed } = data;
+      const { questionId, answer, timeUsed } = data;
       const roomId = await getUserRoom(socket.userId);
 
       if (!roomId) {
@@ -360,50 +463,107 @@ function registerEvents(socket, io) {
         return;
       }
 
-      // Store the answer
-      if (!room.answers[socket.userId]) room.answers[socket.userId] = {};
-      room.answers[socket.userId][questionIndex] = {
-        answer,
-        timeUsed,
-        timestamp: new Date().toISOString(),
-      };
-      
-      await setRoom(roomId, room); // Save answer
+      // Get current question index for THIS player (individual progress)
+      const playerProgress = room.playerProgress || {};
+      const currentQuestionIndex = playerProgress[socket.userId] || 0;
+      const question = room.questions[currentQuestionIndex];
 
-      // Check if both players have answered
-      const playerIds = Object.keys(room.players);
-      // Note: room.players structure differs between custom room and invite room
-      // Custom: { userId: { ready: true } }
-      // Invite: { challenger: id, opponent: id }
-      
-      let allAnswered = false;
-      if (room.players.challenger) {
-         // Invite room structure
-         const p1 = room.players.challenger;
-         const p2 = room.players.opponent;
-         allAnswered = room.answers[p1]?.[questionIndex] && room.answers[p2]?.[questionIndex];
-      } else {
-         // Custom room structure
-         allAnswered = playerIds.every(playerId => 
-            room.answers[playerId] && room.answers[playerId][questionIndex] !== undefined
-         );
+      if (!question) {
+        socket.emit('duel:error', { error: 'No more questions' });
+        return;
       }
 
-      if (allAnswered) {
-        // Process answers and update scores
-        processAnswers(io, roomId, questionIndex);
-      } else {
-        // Notify room that one player has answered
-        socket.to(roomId).emit('duel:opponent_answered', {
-          questionIndex,
+      // Handle skipped/null answer
+      const isSkipped = !answer || answer === '' || answer === null;
+
+      // 1. Persist to Database
+      const result = await duelService.submitAnswer(
+        room.duelId,
+        socket.userId,
+        question.id,
+        isSkipped ? null : answer,
+        timeUsed
+      );
+
+      // 2. Update Redis/Memory State
+      const answerData = {
+        [currentQuestionIndex]: {
+          answer: isSkipped ? null : answer,
+          timeUsed,
+          isCorrect: isSkipped ? false : result.isCorrect,
+          isSkipped,
           timestamp: new Date().toISOString(),
+        }
+      };
+      await saveUserAnswer(roomId, socket.userId, answerData);
+
+      // Update score (no points for skipped)
+      if (!isSkipped && result.isCorrect) {
+        const points = Math.max(1000 - (timeUsed * 10), 100);
+        await incrementUserScore(roomId, socket.userId, points);
+      }
+
+      // 3. Update this player's progress to next question
+      const nextQuestionIndex = currentQuestionIndex + 1;
+      playerProgress[socket.userId] = nextQuestionIndex;
+      room.playerProgress = playerProgress;
+      await setRoom(roomId, room);
+
+      // 4. Get updated scores
+      const updatedRoom = await getRoom(roomId);
+
+      // 5. Send immediate result to THIS player only
+      socket.emit('duel:answer_result', {
+        questionIndex: currentQuestionIndex,
+        isCorrect: isSkipped ? false : result.isCorrect,
+        isSkipped,
+        correctAnswer: question.correctOption,
+        currentScore: updatedRoom.scores[socket.userId] || 0,
+      });
+
+      // 6. Notify opponent that this player answered (for UI)
+      socket.to(roomId).emit('duel:opponent_answered', {
+        userId: socket.userId,
+        questionIndex: currentQuestionIndex,
+        opponentProgress: nextQuestionIndex,
+        totalQuestions: room.questions.length,
+      });
+
+      // 7. Send next question to THIS player or finish
+      if (nextQuestionIndex < room.questions.length) {
+        const nextQuestion = room.questions[nextQuestionIndex];
+        socket.emit('duel:next_question', {
+          questionIndex: nextQuestionIndex,
+          question: nextQuestion,
+          totalQuestions: room.questions.length,
+          timeLimit: 30,
         });
+      } else {
+        // This player finished!
+        socket.emit('duel:player_finished', {
+          message: 'You finished! Waiting for opponent...',
+          yourScore: updatedRoom.scores[socket.userId] || 0,
+          totalQuestions: room.questions.length,
+        });
+      }
+
+      // 8. Check if BOTH players finished
+      const playersToCheck = room.players ?
+        (room.players.challenger ? [room.players.challenger, room.players.opponent] : Object.keys(room.players))
+        : Object.keys(room.scores);
+
+      const allFinished = playersToCheck.every(id =>
+        (updatedRoom.playerProgress?.[id] || 0) >= room.questions.length
+      );
+
+      if (allFinished) {
+        endDuel(io, roomId);
       }
 
     } catch (error) {
       console.error('Submit answer error:', error);
       socket.emit('duel:error', {
-        error: 'Failed to submit answer',
+        error: error.message || 'Failed to submit answer',
       });
     }
   });
@@ -419,10 +579,235 @@ function registerEvents(socket, io) {
       console.error('Duel leave error:', error);
     }
   });
-  
+
   // Handle join room request (for clustering support)
-  socket.on('duel:join_room_ack', (data) => {
-      socket.join(data.roomId);
+  socket.on('duel:join_room_ack', async (data) => {
+    const roomId = data.roomId;
+    socket.join(roomId);
+    // CRITICAL: Set user-room mapping for this socket user
+    await setUserRoom(socket.userId, roomId);
+    console.log(`DEBUG: User ${socket.userId} joined room ${roomId} via ack`);
+  });
+
+  // Rematch Request
+  socket.on('duel:rematch_request', async (data) => {
+    try {
+      const roomId = await getUserRoom(socket.userId);
+      if (!roomId) {
+        socket.emit('duel:error', { message: 'No active room found for rematch' });
+        return;
+      }
+
+      const room = await getRoom(roomId);
+      if (!room) {
+        socket.emit('duel:error', { message: 'Room not found' });
+        return;
+      }
+
+      // Notify other player(s) in the room
+      socket.to(roomId).emit('duel:rematch_offered', {
+        offeredBy: socket.userId,
+        offeredByName: socket.userName || 'Opponent'
+      });
+
+      console.log(`Rematch requested by ${socket.userId} in room ${roomId}`);
+    } catch (error) {
+      console.error('Rematch request error:', error);
+      socket.emit('duel:error', { message: 'Failed to request rematch' });
+    }
+  });
+
+  // Matchmaking Queue
+  const matchmakingQueue = []; // Simple in-memory queue for now
+
+  socket.on('duel:join_queue', async (data) => {
+    try {
+      const { categoryId } = data;
+
+      // Remove if already in queue
+      const existingIndex = matchmakingQueue.findIndex(p => p.userId === socket.userId);
+      if (existingIndex !== -1) {
+        matchmakingQueue.splice(existingIndex, 1);
+      }
+
+      // Add to queue
+      matchmakingQueue.push({
+        userId: socket.userId,
+        socketId: socket.id,
+        categoryId,
+        rating: socket.userRating || 1200,
+        timestamp: Date.now()
+      });
+
+      socket.emit('duel:queue_joined', { message: 'Joined matchmaking queue' });
+
+      // Check for match
+      // Find opponent with same category
+      const opponentIndex = matchmakingQueue.findIndex(p =>
+        p.userId !== socket.userId &&
+        (p.categoryId === categoryId || !categoryId || !p.categoryId) // optional category match
+      );
+
+      if (opponentIndex !== -1) {
+        const opponent = matchmakingQueue[opponentIndex];
+        // Remove both from queue
+        // We need to remove current user (last added) and opponent
+        matchmakingQueue.splice(matchmakingQueue.indexOf(opponent), 1);
+        const currentUserIndex = matchmakingQueue.findIndex(p => p.userId === socket.userId);
+        if (currentUserIndex !== -1) matchmakingQueue.splice(currentUserIndex, 1);
+
+        // CREATE DUEL
+        const roomId = generateRoomId();
+
+        // Ensure unique room
+        // ... (skip unique check for speed, assume random is enough for now or use retry loop)
+
+        // Create duel in DB
+        const duel = await duelService.createDuel(socket.userId, opponent.userId, {
+          categoryId: categoryId || opponent.categoryId, // Use one of them
+          difficultyId: 2, // Default Medium
+          questionCount: 5
+        });
+
+        await duelService.updateDuelRoomCode(duel.id, roomId);
+
+        // Create Redis Room
+        const roomData = {
+          id: roomId,
+          duelId: duel.id,
+          players: {
+            challenger: socket.userId,
+            opponent: opponent.userId,
+          },
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          currentQuestion: 0,
+          scores: {
+            [socket.userId]: 0,
+            [opponent.userId]: 0,
+          },
+          answers: {
+            [socket.userId]: {},
+            [opponent.userId]: {},
+          },
+          playerProgress: {
+            [socket.userId]: 0,
+            [opponent.userId]: 0,
+          },
+          questions: duel.questions,
+        };
+        await setRoom(roomId, roomData);
+
+        // Update User Rooms
+        await setUserRoom(socket.userId, roomId);
+        await setUserRoom(opponent.userId, roomId);
+
+        // Join Sockets
+        socket.join(roomId);
+        // Note: Opponent socket might be on another node if clustered, 
+        // but for now assume same node or rely on client re-join logic?
+        // Actually, we can use io.to(socketId).socketsJoin(roomId) if on same node.
+        // Or emit 'duel:match_found' -> client joins room.
+
+        // Better: Emit 'duel:started' to both users directly via user channel
+        const startPayload = {
+          duelId: duel.id,
+          roomId,
+          questions: duel.questions,
+          players: roomData.players,
+          timestamp: new Date().toISOString(),
+        };
+
+        io.to(socket.id).emit('duel:started', startPayload);
+        io.to(`user:${opponent.userId}`).emit('duel:started', startPayload);
+
+        // Also ensure they join the socket room channel for game events
+        socket.join(roomId);
+        // We can't force remote socket to join via Redis.
+        // We send 'duel:join_room_request' to opponent
+        io.to(`user:${opponent.userId}`).emit('duel:join_room_request', { roomId });
+
+        // Start game loop
+        setTimeout(() => {
+          startDuel(io, roomId);
+        }, 3000);
+
+      }
+    } catch (error) {
+      console.error('Matchmaking error:', error);
+      socket.emit('duel:error', { message: 'Failed to join queue' });
+    }
+  });
+
+  socket.on('duel:leave_queue', () => {
+    const index = matchmakingQueue.findIndex(p => p.userId === socket.userId);
+    if (index !== -1) {
+      matchmakingQueue.splice(index, 1);
+      socket.emit('duel:queue_left', { message: 'Left matchmaking queue' });
+    }
+  });
+
+  // Rematch Accept
+  socket.on('duel:rematch_accept', async (data) => {
+    try {
+      const roomId = await getUserRoom(socket.userId);
+      if (!roomId) {
+        socket.emit('duel:error', { message: 'No active room found for rematch' });
+        return;
+      }
+
+      const room = await getRoom(roomId);
+      if (!room) {
+        socket.emit('duel:error', { message: 'Room not found' });
+        return;
+      }
+
+      // We need to create a NEW duel with the SAME settings
+      // Get settings from the room or the previous duel
+      const playerIds = room.players.challenger
+        ? [room.players.challenger, room.players.opponent]
+        : Object.keys(room.players);
+
+      const hostId = room.players.challenger || playerIds[0];
+      const opponentId = room.players.opponent || playerIds[1];
+
+      // Create actual duel in DB
+      const newDuel = await duelService.createDuel(hostId, opponentId, room.settings);
+
+      // We can reuse the same roomId but reset the state
+      room.status = 'active';
+      room.duelId = newDuel.id;
+      room.currentQuestion = 0;
+      room.scores = { [hostId]: 0, [opponentId]: 0 };
+      room.answers = { [hostId]: {}, [opponentId]: {} };
+      room.playerProgress = { [hostId]: 0, [opponentId]: 0 };
+      room.questions = newDuel.questions;
+      room.startedAt = new Date().toISOString();
+      room.endedAt = null;
+
+      await setRoom(roomId, room);
+
+      // Notify both players
+      io.to(roomId).emit('duel:started', {
+        duelId: newDuel.id,
+        roomId: roomId, // CRITICAL: Frontend needs this for socket answer submission
+        questions: newDuel.questions,
+        players: {
+          [hostId]: { id: hostId },
+          [opponentId]: { id: opponentId }
+        },
+        isRematch: true
+      });
+
+      // Start the game loop
+      setTimeout(() => {
+        startDuel(io, roomId);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Rematch accept error:', error);
+      socket.emit('duel:error', { message: 'Failed to accept rematch' });
+    }
   });
 }
 
@@ -453,73 +838,83 @@ async function sendQuestion(io, roomId, questionIndex) {
   const room = await getRoom(roomId);
   if (!room) return;
 
+  const QUESTION_TIMEOUT = 30000; // 30 seconds
+
   room.currentQuestion = questionIndex;
+  room.questionStartTime = Date.now();
   await setRoom(roomId, room);
 
   io.to(roomId).emit('duel:question', {
     questionIndex,
+    question: room.questions[questionIndex], // Optional: resend question data to be sure
     timeLimit: 30, // seconds
     timestamp: new Date().toISOString(),
   });
-}
 
-/**
- * Process answers for a question
- * @param {Object} io - Socket.IO server instance
- * @param {string} roomId - Room ID
- * @param {number} questionIndex - Question index
- */
-async function processAnswers(io, roomId, questionIndex) {
-  const room = await getRoom(roomId);
-  if (!room) return;
+  // Auto-advance timeout - if not all players answer in time, force advance
+  setTimeout(async () => {
+    const currentRoom = await getRoom(roomId);
+    if (!currentRoom) return;
 
-  // Determine player IDs based on room structure
-  let playerIds = [];
-  if (room.players.challenger) {
-      playerIds = [room.players.challenger, room.players.opponent];
-  } else {
-      playerIds = Object.keys(room.players);
-  }
+    // Check if we're still on the same question
+    if (currentRoom.currentQuestion !== questionIndex) return;
 
-  const results = {};
+    // Get player IDs
+    const playersToCheck = currentRoom.players ?
+      (currentRoom.players.challenger ? [currentRoom.players.challenger, currentRoom.players.opponent] : Object.keys(currentRoom.players))
+      : Object.keys(currentRoom.scores);
 
-  playerIds.forEach(playerId => {
-    const playerAnswer = room.answers[playerId][questionIndex];
-    // Simulate scoring (replace with actual logic)
-    // In a real app, we'd check against the correct answer from DB or room.questions
-    const isCorrect = Math.random() > 0.5; // Placeholder logic
-    const points = isCorrect ? Math.max(1000 - playerAnswer.timeUsed * 10, 100) : 0;
-    
-    if (!room.scores[playerId]) room.scores[playerId] = 0;
-    room.scores[playerId] += points;
-    
-    results[playerId] = {
-      answer: playerAnswer.answer,
-      isCorrect,
-      points,
-      timeUsed: playerAnswer.timeUsed,
-    };
-  });
-  
-  await setRoom(roomId, room);
+    const allAnswered = playersToCheck.every(id =>
+      currentRoom.answers[id] && currentRoom.answers[id][questionIndex]
+    );
 
-  // Send results to room
-  io.to(roomId).emit('duel:question_result', {
-    questionIndex,
-    results,
-    currentScores: room.scores,
-    timestamp: new Date().toISOString(),
-  });
+    // If not all answered after timeout, auto-advance
+    if (!allAnswered) {
+      console.log(`⏰ Question ${questionIndex} timeout in room ${roomId}. Auto-advancing...`);
 
-  // Move to next question or end duel
-  setTimeout(() => {
-    const totalQuestions = 10; // TODO: Get from challenge settings
-    if (questionIndex + 1 < totalQuestions) {
-      sendQuestion(io, roomId, questionIndex + 1);
-    } else {
-      endDuel(io, roomId);
+      // Mark missing answers as skipped
+      for (const playerId of playersToCheck) {
+        if (!currentRoom.answers[playerId] || !currentRoom.answers[playerId][questionIndex]) {
+          await saveUserAnswer(roomId, playerId, {
+            [questionIndex]: {
+              answer: null,
+              timeUsed: 30,
+              isCorrect: false,
+              isSkipped: true,
+              isTimeout: true,
+              timestamp: new Date().toISOString(),
+            }
+          });
+        }
+      }
+
+      // Fetch updated room and send results
+      const updatedRoom = await getRoom(roomId);
+      const results = {};
+      playersToCheck.forEach(id => {
+        results[id] = updatedRoom.answers[id]?.[questionIndex] || { isCorrect: false, isSkipped: true, isTimeout: true };
+      });
+
+      io.to(roomId).emit('duel:question_result', {
+        questionIndex,
+        results,
+        currentScores: updatedRoom.scores,
+        timedOut: true,
+      });
+
+      // Advance to next question or end
+      setTimeout(async () => {
+        const refreshedRoom = await getRoom(roomId);
+        if (!refreshedRoom) return;
+
+        if (questionIndex + 1 < refreshedRoom.questions.length) {
+          sendQuestion(io, roomId, questionIndex + 1);
+        } else {
+          endDuel(io, roomId);
+        }
+      }, 2000);
     }
-  }, 3000); // 3 second delay before next question
+  }, QUESTION_TIMEOUT);
 }
 
 /**
@@ -531,41 +926,110 @@ async function endDuel(io, roomId) {
   const room = await getRoom(roomId);
   if (!room) return;
 
+  if (room.status === 'completed') return;
+
   room.status = 'completed';
   room.endedAt = new Date().toISOString();
   await setRoom(roomId, room);
 
   let playerIds = [];
   if (room.players.challenger) {
-      playerIds = [room.players.challenger, room.players.opponent];
+    playerIds = [room.players.challenger, room.players.opponent];
   } else {
-      playerIds = Object.keys(room.players);
+    playerIds = Object.keys(room.players);
   }
 
-  const winner = playerIds.reduce((a, b) => 
-    (room.scores[a] || 0) > (room.scores[b] || 0) ? a : b
-  );
+  const p1 = playerIds[0];
+  const p2 = playerIds[1];
+  const s1 = room.scores[p1] || 0;
+  const s2 = room.scores[p2] || 0;
+
+  // Determine winner
+  let winnerId = null;
+  if (s1 > s2) winnerId = p1;
+  else if (s2 > s1) winnerId = p2;
+
+  // Get player names from database
+  const { prisma } = require('../config/db');
+  let player1Info = { id: p1, name: 'Player 1', avatarUrl: null };
+  let player2Info = { id: p2, name: 'Player 2', avatarUrl: null };
+
+  try {
+    const [user1, user2] = await Promise.all([
+      prisma.user.findUnique({ where: { id: parseInt(p1) }, select: { id: true, fullName: true, avatarUrl: true } }),
+      prisma.user.findUnique({ where: { id: parseInt(p2) }, select: { id: true, fullName: true, avatarUrl: true } })
+    ]);
+    if (user1) player1Info = { id: user1.id, name: user1.fullName || 'Player 1', avatarUrl: user1.avatarUrl };
+    if (user2) player2Info = { id: user2.id, name: user2.fullName || 'Player 2', avatarUrl: user2.avatarUrl };
+  } catch (e) {
+    console.error('Failed to fetch player names:', e);
+  }
+
+  // Calculate total time taken per player
+  let player1TotalTime = 0;
+  let player2TotalTime = 0;
+  if (room.answers) {
+    Object.values(room.answers[p1] || {}).forEach(a => { player1TotalTime += (a.timeUsed || 0); });
+    Object.values(room.answers[p2] || {}).forEach(a => { player2TotalTime += (a.timeUsed || 0); });
+  }
 
   const finalResults = {
+    duelId: room.duelId,
     challengeId: room.challengeId,
-    winner,
+    roomId,
+    winnerId,
     scores: room.scores,
+    players: {
+      [p1]: { ...player1Info, score: s1, timeTaken: player1TotalTime },
+      [p2]: { ...player2Info, score: s2, timeTaken: player2TotalTime }
+    },
+    totalQuestions: room.questions?.length || 0,
     endedAt: room.endedAt,
-    duration: new Date(room.endedAt) - new Date(room.startedAt),
   };
 
-  // Send final results to players and spectators
+  // Send final results
   io.to(roomId).emit('duel:completed', finalResults);
 
-  // End spectating
-  if (room.challengeId) {
-      spectatorService.endDuelSpectating(room.challengeId);
+  // Send winner notification
+  try {
+    const winnerName = winnerId === p1 ? player1Info.name : player2Info.name;
+    const loserName = winnerId === p1 ? player2Info.name : player1Info.name;
+    const loserId = winnerId === p1 ? p2 : p1;
+
+    if (winnerId) {
+      // Notify winner
+      io.to(`user:${winnerId}`).emit('notification', {
+        type: 'duel_result',
+        message: `🏆 You won against ${loserName}! Score: ${room.scores[winnerId]} - ${room.scores[loserId]}`,
+        duelId: room.duelId,
+      });
+      // Notify loser
+      io.to(`user:${loserId}`).emit('notification', {
+        type: 'duel_result',
+        message: `😔 You lost to ${winnerName}. Score: ${room.scores[loserId]} - ${room.scores[winnerId]}`,
+        duelId: room.duelId,
+      });
+    } else {
+      // It's a tie
+      io.to(`user:${p1}`).emit('notification', {
+        type: 'duel_result',
+        message: `🤝 It's a tie with ${player2Info.name}! Score: ${s1} - ${s2}`,
+        duelId: room.duelId,
+      });
+      io.to(`user:${p2}`).emit('notification', {
+        type: 'duel_result',
+        message: `🤝 It's a tie with ${player1Info.name}! Score: ${s2} - ${s1}`,
+        duelId: room.duelId,
+      });
+    }
+  } catch (e) {
+    console.error('Failed to send winner notification:', e);
   }
 
   // Clean up
   setTimeout(() => {
     cleanup(roomId);
-  }, 30000); // Clean up after 30 seconds
+  }, 10000);
 }
 
 /**
@@ -616,13 +1080,13 @@ async function cleanup(roomId) {
   // Remove user room mappings
   let playerIds = [];
   if (room.players.challenger) {
-      playerIds = [room.players.challenger, room.players.opponent];
+    playerIds = [room.players.challenger, room.players.opponent];
   } else {
-      playerIds = Object.keys(room.players);
+    playerIds = Object.keys(room.players);
   }
 
   for (const userId of playerIds) {
-      await deleteUserRoom(userId);
+    await deleteUserRoom(userId);
   }
 
   // Remove room

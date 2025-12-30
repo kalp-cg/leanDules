@@ -7,23 +7,24 @@ const dotenv = require('dotenv');
 const path = require('path');
 
 // Load environment variables
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+const result = dotenv.config({ path: path.join(__dirname, '../../.env') });
+console.log('DEBUG: dotenv load result:', result.error ? 'FAILED: ' + result.error.message : 'SUCCESS');
 
 // Environment configuration with defaults
 const config = {
   // Server configuration
-  NODE_ENV: process.env.NODE_ENV || 'development',
+  NODE_ENV: (process.env.NODE_ENV || 'development').trim(),
   PORT: parseInt(process.env.PORT) || 5000,
   HOST: '0.0.0.0',
 
   // Database configuration
-  DATABASE_URL: process.env.DATABASE_URL,
+  DATABASE_URL: (process.env.DATABASE_URL || '').trim(),
 
   // JWT configuration
-  JWT_SECRET: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
-  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'your-super-secret-refresh-key-change-in-production',
-  JWT_EXPIRE: process.env.JWT_EXPIRE || '15m',
-  JWT_REFRESH_EXPIRE: process.env.JWT_REFRESH_EXPIRE || '7d',
+  JWT_SECRET: (process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production').trim(),
+  JWT_REFRESH_SECRET: (process.env.JWT_REFRESH_SECRET || 'your-super-secret-refresh-key-change-in-production').trim(),
+  JWT_EXPIRE: (process.env.JWT_EXPIRE || '15m').trim(),
+  JWT_REFRESH_EXPIRE: (process.env.JWT_REFRESH_EXPIRE || '7d').trim(),
 
   // Redis configuration (optional)
   REDIS_URL: process.env.REDIS_URL,
@@ -47,6 +48,11 @@ const config = {
 
   // Socket.IO configuration
   SOCKET_CORS_ORIGIN: process.env.SOCKET_CORS_ORIGIN || '*',
+
+  // Cloudinary configuration (for image uploads)
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
 };
 
 // Validate required environment variables
