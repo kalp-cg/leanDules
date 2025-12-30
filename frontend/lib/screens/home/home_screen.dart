@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/nav_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../core/theme.dart';
 import 'dart:async';
+import '../../providers/notification_provider.dart';
+import '../../widgets/shimmer_loading.dart';
+import '../../widgets/animated_widgets.dart';
 
 import '../notifications/notification_screen.dart';
 
@@ -14,13 +19,17 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  late Timer _refreshTimer;
+class _HomeScreenState extends ConsumerState<HomeScreen> with AutomaticKeepAliveClientMixin {
+  Timer? _refreshTimer;
+
+  @override
+  bool get wantKeepAlive => true; // Keep state alive when switching tabs
 
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Only refresh every 60 seconds to reduce lag
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) {
         ref.invalidate(userProfileProvider);
         ref.invalidate(userStatsProvider);
@@ -31,195 +40,376 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
-    _refreshTimer.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(userProfileProvider);
-            ref.invalidate(userStatsProvider);
-            ref.invalidate(globalLeaderboardProvider);
-          },
-          color: Theme.of(context).colorScheme.primary,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 32),
-              Consumer(
-                builder: (context, ref, _) {
-                  final userAsync = ref.watch(userProfileProvider);
-                  final statsAsync = ref.watch(userStatsProvider);
-                  return userAsync.when(
-                    data: (user) => _buildUserCard(user, statsAsync),
-                    loading: () => _buildLoadingCard(),
-                    error: (_, __) => const SizedBox(),
-                  );
-                },
-              ),
-              const SizedBox(height: 32),
-              Text(
-                'Quick Actions',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionButton(
-                      'Start Duel',
-                      Icons.flash_on_rounded,
-                      () => Navigator.pushNamed(context, '/topics'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildActionButton(
-                      'Practice',
-                      Icons.school_rounded,
-                      () => Navigator.pushNamed(context, '/practice'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionButton(
-                      'Challenge Friend',
-                      Icons.people_alt_rounded,
-                      () => ref.read(bottomNavIndexProvider.notifier).state = 3,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildActionButton(
-                      'Contribute',
-                      Icons.add_circle_outline_rounded,
-                      () => Navigator.pushNamed(context, '/create-question'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Top Players',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      ref.read(bottomNavIndexProvider.notifier).state = 1;
-                    },
-                    child: Text(
-                      'View All',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Consumer(
-                builder: (context, ref, _) {
-                  final topPlayers = ref.watch(globalLeaderboardProvider);
-                  return topPlayers.when(
-                    data: (players) => Column(
-                      children: players
-                          .take(5)
-                          .map(
-                            (p) => _buildPlayerItem(p, players.indexOf(p) + 1),
-                          )
-                          .toList(),
-                    ),
-                    loading: () => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: CircularProgressIndicator(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                    error: (_, __) => const SizedBox(),
-                  );
-                },
-              ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.background,
+              Color(0xFF0F1228),
             ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(userProfileProvider);
+              ref.invalidate(userStatsProvider);
+              ref.invalidate(globalLeaderboardProvider);
+            },
+            color: AppTheme.primary,
+            backgroundColor: AppTheme.surface,
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              cacheExtent: 500, // Preload more content for smooth scroll
+              physics: const BouncingScrollPhysics(), // Smooth iOS-like scrolling
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 24),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final userAsync = ref.watch(userProfileProvider);
+                    final statsAsync = ref.watch(userStatsProvider);
+                    return userAsync.when(
+                      data: (user) => _buildUserCard(user, statsAsync),
+                      loading: () => _buildLoadingCard(),
+                      error: (e, s) => const SizedBox(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 28),
+                _buildSectionTitle('Quick Actions'),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AnimatedActionButton(
+                        text: 'Start Duel',
+                        icon: Icons.flash_on_rounded,
+                        color: AppTheme.primary,
+                        onTap: () => Navigator.pushNamed(context, '/topics'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: AnimatedActionButton(
+                        text: 'Practice',
+                        icon: Icons.school_rounded,
+                        color: AppTheme.accent,
+                        onTap: () => Navigator.pushNamed(context, '/practice'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AnimatedActionButton(
+                        text: 'Challenge',
+                        icon: Icons.people_alt_rounded,
+                        color: AppTheme.secondary,
+                        onTap: () => Navigator.pushNamed(context, '/challenges'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: AnimatedActionButton(
+                        text: 'Contribute',
+                        icon: Icons.add_circle_outline_rounded,
+                        color: AppTheme.tertiary,
+                        onTap: () => Navigator.pushNamed(context, '/create-question'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildSectionTitle('Top Players'),
+                    TextButton(
+                      onPressed: () {
+                        ref.read(bottomNavIndexProvider.notifier).state = 1;
+                      },
+                      child: Row(
+                        children: [
+                          Text(
+                            'View All',
+                            style: GoogleFonts.outfit(
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 14,
+                            color: AppTheme.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final topPlayers = ref.watch(globalLeaderboardProvider);
+                    return topPlayers.when(
+                      data: (players) => Column(
+                        children: players
+                            .take(5)
+                            .map(
+                              (p) => _buildPlayerItem(p, players.indexOf(p) + 1),
+                            )
+                            .toList(),
+                      ),
+                      loading: () => const ShimmerPlayerList(itemCount: 5),
+                      error: (e, s) => const SizedBox(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: GoogleFonts.outfit(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: AppTheme.textPrimary,
+        letterSpacing: -0.3,
+      ),
+    );
+  }
+
   Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'LearnDuels',
-              style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Challenge yourself',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400),
-            ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primary.withValues(alpha: 0.15),
+            AppTheme.accent.withValues(alpha: 0.1),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        Row(
-          children: [
-            IconButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationScreen(),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: AppTheme.primary.withValues(alpha: 0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.15),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Logo with gradient
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [AppTheme.primary, AppTheme.accent],
+                ).createShader(bounds),
+                child: Text(
+                  'LearnDuels',
+                  style: GoogleFonts.outfit(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
                   ),
-                );
-              },
-              icon: Icon(
-                Icons.notifications_outlined,
-                color: Theme.of(context).iconTheme.color,
+                ),
+              ),
+              Row(
+                children: [
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final unreadCount = ref.watch(unreadNotificationCountProvider);
+                      
+                      return _buildIconButton(
+                        Icons.notifications_outlined,
+                        unreadCount > 0 ? unreadCount : null,
+                        () {
+                          ref.read(unreadNotificationCountProvider.notifier).state = 0;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const NotificationScreen(),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildIconButton(
+                    Icons.logout_rounded,
+                    null,
+                    () {
+                      ref.read(authStateProvider.notifier).logout();
+                      Navigator.pushReplacementNamed(context, '/login');
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Personalized greeting
+          Consumer(
+            builder: (context, ref, _) {
+              final userAsync = ref.watch(userProfileProvider);
+              return userAsync.when(
+                data: (user) {
+                  final username = user?['username'] ?? 'Champion';
+                  final streak = user?['streak'] ?? 0;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${getTimeBasedGreeting()}, $username! 👋',
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            'Ready to dominate?',
+                            style: GoogleFonts.outfit(
+                              color: AppTheme.textSecondary,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (streak > 0) ...[
+                            const SizedBox(width: 12),
+                            StreakBadge(streak: streak),
+                          ],
+                        ],
+                      ),
+                    ],
+                  );
+                },
+                loading: () => Text(
+                  '${getTimeBasedGreeting()}! 👋',
+                  style: GoogleFonts.outfit(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                  ),
+                ),
+                error: (_, __) => Text(
+                  '${getTimeBasedGreeting()}! 👋',
+                  style: GoogleFonts.outfit(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+          // Gradient button
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primary, AppTheme.primaryDark],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withValues(alpha: 0.4),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.pushNamed(context, '/topics'),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  child: Text(
+                    'Start New Duel',
+                    style: GoogleFonts.outfit(
+                      color: AppTheme.background,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
               ),
             ),
-            IconButton(
-              onPressed: () {
-                ref.read(authStateProvider.notifier).logout();
-                Navigator.pushReplacementNamed(context, '/login');
-              },
-              icon: Icon(
-                Icons.logout_rounded,
-                color: Theme.of(context).iconTheme.color,
-              ),
-            ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIconButton(IconData icon, int? badge, VoidCallback onTap) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceLight.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.border.withValues(alpha: 0.3),
         ),
-      ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Badge(
+              isLabelVisible: badge != null,
+              label: badge != null ? Text('$badge') : null,
+              backgroundColor: AppTheme.secondary,
+              child: Icon(
+                icon,
+                color: AppTheme.textPrimary,
+                size: 22,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -235,38 +425,68 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardTheme.color,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Theme.of(context).dividerColor, width: 1),
-      ),
+      decoration: AppTheme.glassDecoration(borderRadius: 24),
       child: Column(
         children: [
           Row(
             children: [
+              // Avatar with gradient border
               Container(
-                width: 56,
-                height: 56,
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.3),
-                    width: 1.5,
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.primary, AppTheme.accent],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: Center(
-                  child: Text(
-                    username[0].toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceLight,
+                    borderRadius: BorderRadius.circular(17),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(17),
+                    child: user['avatarUrl'] != null && user['avatarUrl'].toString().isNotEmpty
+                        ? Image.network(
+                            user['avatarUrl'],
+                            fit: BoxFit.cover,
+                            width: 60,
+                            height: 60,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: ShaderMask(
+                                shaderCallback: (bounds) => const LinearGradient(
+                                  colors: [AppTheme.primary, AppTheme.accent],
+                                ).createShader(bounds),
+                                child: Text(
+                                  username[0].toUpperCase(),
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : Center(
+                            child: ShaderMask(
+                              shaderCallback: (bounds) => const LinearGradient(
+                                colors: [AppTheme.primary, AppTheme.accent],
+                              ).createShader(bounds),
+                              child: Text(
+                                username[0].toUpperCase(),
+                                style: GoogleFonts.outfit(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -277,15 +497,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     Text(
                       username,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.3,
+                      style: GoogleFonts.outfit(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Level $level • $xp XP',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    const SizedBox(height: 8),
+                    // Level badge with glow
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppTheme.primary.withValues(alpha: 0.2),
+                            AppTheme.accent.withValues(alpha: 0.1),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppTheme.primary.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        'Level $level • $xp XP',
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -293,46 +534,61 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
           const SizedBox(height: 24),
+          // Stats row with dividers
           statsAsync.when(
             data: (stats) {
               final wins = stats?['wins'] ?? 0;
               final total = stats?['totalDuels'] ?? 0;
               final rate = total > 0 ? (wins / total * 100).toInt() : 0;
-              return Row(
-                children: [
-                  Expanded(child: _buildStatItem('Wins', wins.toString())),
-                  Container(
-                    width: 1,
-                    height: 32,
-                    color: Theme.of(context).dividerColor,
-                  ),
-                  Expanded(child: _buildStatItem('Win Rate', '$rate%')),
-                  Container(
-                    width: 1,
-                    height: 32,
-                    color: Theme.of(context).dividerColor,
-                  ),
-                  Expanded(
-                    child: _buildStatItem('Rep', user['reputation'].toString()),
-                  ),
-                ],
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceLight.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: _buildStatItem('Wins', wins.toString(), Icons.emoji_events_rounded, AppTheme.tertiary)),
+                    Container(
+                      width: 1,
+                      height: 50,
+                      color: AppTheme.border.withValues(alpha: 0.3),
+                    ),
+                    Expanded(child: _buildStatItem('Win Rate', '$rate%', Icons.pie_chart_rounded, AppTheme.primary)),
+                    Container(
+                      width: 1,
+                      height: 50,
+                      color: AppTheme.border.withValues(alpha: 0.3),
+                    ),
+                    Expanded(
+                      child: _buildStatItem('Rep', user['reputation'].toString(), Icons.star_rounded, AppTheme.secondary),
+                    ),
+                  ],
+                ),
               );
             },
-            loading: () => Center(
+            loading: () => const Center(
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(16),
                 child: CircularProgressIndicator(
-                  color: Theme.of(context).colorScheme.primary,
+                  color: AppTheme.primary,
                   strokeWidth: 2,
                 ),
               ),
             ),
-            error: (_, __) => Row(
-              children: [
-                Expanded(child: _buildStatItem('Wins', '0')),
-                Expanded(child: _buildStatItem('Rate', '0%')),
-                Expanded(child: _buildStatItem('Rep', '0')),
-              ],
+            error: (e, s) => Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceLight.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Expanded(child: _buildStatItem('Wins', '0', Icons.emoji_events_rounded, AppTheme.tertiary)),
+                  Expanded(child: _buildStatItem('Rate', '0%', Icons.pie_chart_rounded, AppTheme.primary)),
+                  Expanded(child: _buildStatItem('Rep', '0', Icons.star_rounded, AppTheme.secondary)),
+                ],
+              ),
             ),
           ),
         ],
@@ -340,45 +596,81 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildStatItem(String label, String value) {
+  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
     return Column(
       children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(height: 10),
         Text(
           value,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.3,
+          style: GoogleFonts.outfit(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
           ),
         ),
         const SizedBox(height: 4),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            color: AppTheme.textMuted,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildActionButton(String text, IconData icon, VoidCallback onTap) {
+  Widget _buildActionButton(String text, IconData icon, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        height: 130,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primary,
-          borderRadius: BorderRadius.circular(16),
+          color: AppTheme.surfaceLight,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: color.withValues(alpha: 0.2),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: Theme.of(context).colorScheme.onPrimary,
-              size: 28,
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 28,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
             Text(
               text,
-              style: TextStyle(
-                fontSize: 14,
+              style: GoogleFonts.outfit(
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onPrimary,
+                color: AppTheme.textPrimary,
               ),
             ),
           ],
@@ -391,73 +683,105 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final username = player['username'] ?? 'Player';
     final xp = player['xp'] ?? 0;
 
+    // Rank colors
+    Color rankColor;
+    if (rank == 1) {
+      rankColor = AppTheme.gold;
+    } else if (rank == 2) {
+      rankColor = AppTheme.silver;
+    } else if (rank == 3) {
+      rankColor = AppTheme.bronze;
+    } else {
+      rankColor = AppTheme.textMuted;
+    }
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardTheme.color,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor, width: 1),
+        color: AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: rank <= 3 ? rankColor.withValues(alpha: 0.3) : AppTheme.border.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
+          // Animated rank badge with medals for top 3
+          PulsingRankBadge(rank: rank, color: rankColor),
+          const SizedBox(width: 14),
+          // Avatar
           Container(
-            width: 32,
-            height: 32,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: rank <= 3
-                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                  : Theme.of(context).dividerColor,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                '#$rank',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: rank <= 3
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).textTheme.bodyMedium?.color,
-                ),
+              gradient: LinearGradient(
+                colors: rank <= 3
+                    ? [rankColor.withValues(alpha: 0.3), rankColor.withValues(alpha: 0.1)]
+                    : [AppTheme.primary.withValues(alpha: 0.2), AppTheme.accent.withValues(alpha: 0.1)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: player['avatarUrl'] != null && player['avatarUrl'].toString().isNotEmpty
+                  ? Image.network(
+                      player['avatarUrl'],
+                      fit: BoxFit.cover,
+                      width: 42,
+                      height: 42,
+                      errorBuilder: (_, __, ___) => Center(
+                        child: Text(
+                          username[0].toUpperCase(),
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: rank <= 3 ? rankColor : AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Text(
+                        username[0].toUpperCase(),
+                        style: GoogleFonts.outfit(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: rank <= 3 ? rankColor : AppTheme.primary,
+                        ),
+                      ),
+                    ),
             ),
           ),
-          const SizedBox(width: 12),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-              child: Text(
-                username[0].toUpperCase(),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Text(
               username,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
+              style: GoogleFonts.outfit(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
+              ),
             ),
           ),
-          Text(
-            '$xp XP',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          // XP badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '$xp XP',
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primary,
+              ),
+            ),
           ),
         ],
       ),
@@ -465,17 +789,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildLoadingCard() {
-    return Container(
-      height: 180,
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardTheme.color,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Center(
-        child: CircularProgressIndicator(
-          color: Theme.of(context).colorScheme.primary,
-        ),
-      ),
-    );
+    return const ShimmerUserCard();
   }
 }
