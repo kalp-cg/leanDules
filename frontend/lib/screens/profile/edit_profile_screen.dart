@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/services/user_service.dart';
+import '../../core/services/socket_service.dart';
 import '../../providers/user_provider.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -158,6 +159,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (success) {
         if (mounted) {
           ref.invalidate(userProfileProvider);
+          
+          // Sync avatar with socket server for real-time updates
+          ref.read(socketServiceProvider).updateUserProfile(
+            avatarUrl: _avatarUrlController.text.trim(),
+            fullName: _fullNameController.text.trim(),
+          );
+          
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Profile updated successfully')),
           );

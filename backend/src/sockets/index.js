@@ -170,6 +170,19 @@ function initializeSocket(server) {
       socket.emit('pong');
     });
 
+    // Handle user profile updates (avatar, name changes)
+    socket.on('user:updateProfile', (data) => {
+      if (data) {
+        if (data.avatarUrl !== undefined) {
+          socket.userAvatar = data.avatarUrl;
+        }
+        if (data.fullName !== undefined) {
+          socket.userName = data.fullName;
+        }
+        console.log(`User ${socket.userId} updated profile: avatar=${socket.userAvatar}, name=${socket.userName}`);
+      }
+    });
+
     // Join user to their personal room for notifications
     socket.join(`user:${socket.userId}`);
 

@@ -104,4 +104,12 @@ class SocketService {
   void onDuelStarted(Function(dynamic) handler) {
     on('duelStarted', handler);
   }
+
+  /// Update user profile in socket (call after profile changes)
+  void updateUserProfile({String? avatarUrl, String? fullName}) {
+    emit('user:updateProfile', {
+      'avatarUrl': avatarUrl,
+      'fullName': fullName,
+    });
+  }
 }
