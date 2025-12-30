@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
@@ -30,7 +31,7 @@ class AnalyticsService {
         throw Exception('Failed to get dashboard stats');
       }
     } catch (e) {
-      print('Error getting dashboard stats: $e');
+      debugPrint('Error getting dashboard stats: $e');
       rethrow;
     }
   }
@@ -64,7 +65,7 @@ class AnalyticsService {
         throw Exception('Failed to get DAU data');
       }
     } catch (e) {
-      print('Error getting DAU: $e');
+      debugPrint('Error getting DAU: $e');
       rethrow;
     }
   }
@@ -98,7 +99,7 @@ class AnalyticsService {
         throw Exception('Failed to get challenge stats');
       }
     } catch (e) {
-      print('Error getting challenge stats: $e');
+      debugPrint('Error getting challenge stats: $e');
       rethrow;
     }
   }
@@ -132,7 +133,7 @@ class AnalyticsService {
         throw Exception('Failed to get quiz stats');
       }
     } catch (e) {
-      print('Error getting quiz stats: $e');
+      debugPrint('Error getting quiz stats: $e');
       rethrow;
     }
   }
@@ -167,7 +168,7 @@ class AnalyticsService {
         throw Exception('Failed to get popular topics');
       }
     } catch (e) {
-      print('Error getting popular topics: $e');
+      debugPrint('Error getting popular topics: $e');
       rethrow;
     }
   }

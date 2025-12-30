@@ -92,4 +92,103 @@ class UserService {
       return null;
     }
   }
+
+  /// Follow a user
+  Future<bool> followUser(int userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final response = await _dio.post(
+        '${ApiConstants.users}/$userId/follow',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      return response.data['success'] == true;
+    } catch (e) {
+      debugPrint('Error following user: $e');
+      return false;
+    }
+  }
+
+  /// Unfollow a user
+  Future<bool> unfollowUser(int userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final response = await _dio.delete(
+        '${ApiConstants.users}/$userId/follow',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      return response.data['success'] == true;
+    } catch (e) {
+      debugPrint('Error unfollowing user: $e');
+      return false;
+    }
+  }
+
+  /// Get user's followers list
+  Future<List<dynamic>> getFollowers(int userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final response = await _dio.get(
+        '${ApiConstants.users}/$userId/followers',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      if (response.data['success']) {
+        return response.data['data'] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error getting followers: $e');
+      return [];
+    }
+  }
+
+  /// Get user's following list
+  Future<List<dynamic>> getFollowing(int userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final response = await _dio.get(
+        '${ApiConstants.users}/$userId/following',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      if (response.data['success']) {
+        return response.data['data'] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error getting following: $e');
+      return [];
+    }
+  }
+
+  /// Search users
+  Future<List<dynamic>> searchUsers(String query) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final response = await _dio.get(
+        '${ApiConstants.users}/search?q=$query',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      if (response.data['success']) {
+        return response.data['data'] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error searching users: $e');
+      return [];
+    }
+  }
 }

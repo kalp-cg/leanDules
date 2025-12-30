@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
@@ -25,7 +26,7 @@ class TopicService {
 
       return List<Map<String, dynamic>>.from(response.data['data']);
     } catch (e) {
-      print('Error getting topics: $e');
+      debugPrint('Error getting topics: $e');
       rethrow;
     }
   }
@@ -44,7 +45,7 @@ class TopicService {
 
       return List<Map<String, dynamic>>.from(response.data['data']);
     } catch (e) {
-      print('Error getting popular topics: $e');
+      debugPrint('Error getting popular topics: $e');
       rethrow;
     }
   }
@@ -63,7 +64,7 @@ class TopicService {
 
       return List<Map<String, dynamic>>.from(response.data['data']);
     } catch (e) {
-      print('Error searching topics: $e');
+      debugPrint('Error searching topics: $e');
       rethrow;
     }
   }
@@ -81,7 +82,7 @@ class TopicService {
 
       return response.data['data'];
     } catch (e) {
-      print('Error getting topic: $e');
+      debugPrint('Error getting topic: $e');
       rethrow;
     }
   }
@@ -99,7 +100,7 @@ class TopicService {
 
       return List<Map<String, dynamic>>.from(response.data['data']);
     } catch (e) {
-      print('Error getting subtopics: $e');
+      debugPrint('Error getting subtopics: $e');
       rethrow;
     }
   }

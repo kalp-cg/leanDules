@@ -1,4 +1,5 @@
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
@@ -8,10 +9,11 @@ final socketServiceProvider = Provider<SocketService>((ref) {
 });
 
 class SocketService {
-  IO.Socket? _socket;
+  io.Socket? _socket;
   bool _isConnected = false;
 
   bool get isConnected => _isConnected;
+  io.Socket? get socket => _socket;
 
   Future<void> connect() async {
     if (_socket != null && _socket!.connected) return;
@@ -24,9 +26,9 @@ class SocketService {
     // Extract base URL without /api
     final baseUrl = ApiConstants.baseUrl.replaceAll('/api', '');
 
-    _socket = IO.io(
+    _socket = io.io(
       baseUrl,
-      IO.OptionBuilder()
+      io.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
           .setAuth({'token': token})
@@ -36,16 +38,16 @@ class SocketService {
     _socket!.connect();
 
     _socket!.onConnect((_) {
-      print('Socket connected');
+      debugPrint('Socket connected');
       _isConnected = true;
     });
 
     _socket!.onDisconnect((_) {
-      print('Socket disconnected');
+      debugPrint('Socket disconnected');
       _isConnected = false;
     });
 
-    _socket!.onError((data) => print('Socket error: $data'));
+    _socket!.onError((data) => debugPrint('Socket error: $data'));
   }
 
   void disconnect() {
@@ -58,7 +60,7 @@ class SocketService {
     if (_socket != null && _socket!.connected) {
       _socket!.emit(event, data);
     } else {
-      print('Cannot emit $event: Socket not connected');
+      debugPrint('Cannot emit $event: Socket not connected');
     }
   }
 
@@ -68,5 +70,38 @@ class SocketService {
 
   void off(String event) {
     _socket?.off(event);
+  }
+
+  // Duel-specific methods
+  void joinDuel(int duelId) {
+    emit('joinDuel', {'duelId': duelId});
+  }
+
+  void leaveDuel(int duelId) {
+    emit('leaveDuel', {'duelId': duelId});
+  }
+
+  void submitDuelAnswer(int duelId, int questionId, dynamic answer) {
+    emit('submitAnswer', {
+      'duelId': duelId,
+      'questionId': questionId,
+      'answer': answer,
+    });
+  }
+
+  void onDuelUpdate(Function(dynamic) handler) {
+    on('duelUpdate', handler);
+  }
+
+  void onDuelFinished(Function(dynamic) handler) {
+    on('duelFinished', handler);
+  }
+
+  void onOpponentAnswer(Function(dynamic) handler) {
+    on('opponentAnswer', handler);
+  }
+
+  void onDuelStarted(Function(dynamic) handler) {
+    on('duelStarted', handler);
   }
 }

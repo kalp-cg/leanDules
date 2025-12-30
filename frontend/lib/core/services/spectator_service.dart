@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
@@ -30,7 +31,7 @@ class SpectatorService {
         throw Exception('Failed to get spectatable duels');
       }
     } catch (e) {
-      print('Error getting spectatable duels: $e');
+      debugPrint('Error getting spectatable duels: $e');
       rethrow;
     }
   }
@@ -61,7 +62,7 @@ class SpectatorService {
         throw Exception('Failed to get duel details');
       }
     } catch (e) {
-      print('Error getting duel details: $e');
+      debugPrint('Error getting duel details: $e');
       rethrow;
     }
   }
@@ -87,7 +88,7 @@ class SpectatorService {
         throw Exception('Failed to get spectators');
       }
     } catch (e) {
-      print('Error getting spectators: $e');
+      debugPrint('Error getting spectators: $e');
       rethrow;
     }
   }

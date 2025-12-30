@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
@@ -25,7 +26,7 @@ class DuelService {
     try {
       final token = await _getToken();
       final response = await _dio.get(
-        ApiConstants.baseUrl + '/categories', // Adjust if needed
+        '${ApiConstants.baseUrl}/categories', // Adjust if needed
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       return response.data['data'] ?? [];
@@ -101,7 +102,7 @@ class DuelService {
       );
     } catch (e) {
       // Ignore error for now or log it
-      print('Error submitting answer: $e');
+      debugPrint('Error submitting answer: $e');
     }
   }
 }

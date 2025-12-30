@@ -12,8 +12,8 @@ class ApiConstants {
     // Android Emulator
     if (Platform.isAndroid) {
       // Use 10.0.2.2 for Emulator, or your local IP for physical device
-      // Current Local IP: 10.159.51.37
-      return 'http://10.159.51.37:4000/api';
+      // Current Local IP: 10.20.175.37 (update this if your IP changes)
+      return 'http://10.20.175.37:4000/api';
     }
     // iOS Simulator / Others
     return 'http://localhost:4000/api';
@@ -24,6 +24,8 @@ class ApiConstants {
   static const String register = '/auth/signup';
   static const String me = '/auth/me';
   static const String refreshToken = '/auth/refresh-token';
+  static const String forgotPassword = '/auth/forgot-password';
+  static const String resetPassword = '/auth/reset-password';
 
   // Topics (replaces Categories)
   static const String topics = '/topics';

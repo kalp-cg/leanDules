@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
@@ -25,7 +26,7 @@ class QuestionsService {
 
       return response.data;
     } catch (e) {
-      print('Error creating question: $e');
+      debugPrint('Error creating question: $e');
       rethrow;
     }
   }

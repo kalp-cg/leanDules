@@ -125,4 +125,42 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey('accessToken');
   }
+
+  Future<String?> forgotPassword(String email) async {
+    try {
+      final response = await _dio.post(
+        ApiConstants.forgotPassword,
+        data: {'email': email},
+      );
+
+      if (response.data == null || response.data['success'] != true) {
+        return 'Failed to send reset email';
+      }
+
+      return null; // Success
+    } on DioException catch (e) {
+      return e.response?.data['message'] ?? 'Failed to send reset email';
+    } catch (e) {
+      return 'An unexpected error occurred: $e';
+    }
+  }
+
+  Future<String?> resetPassword(String token, String newPassword) async {
+    try {
+      final response = await _dio.post(
+        ApiConstants.resetPassword,
+        data: {'token': token, 'newPassword': newPassword},
+      );
+
+      if (response.data == null || response.data['success'] != true) {
+        return 'Failed to reset password';
+      }
+
+      return null; // Success
+    } on DioException catch (e) {
+      return e.response?.data['message'] ?? 'Failed to reset password';
+    } catch (e) {
+      return 'An unexpected error occurred: $e';
+    }
+  }
 }

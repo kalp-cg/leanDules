@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
@@ -44,7 +45,7 @@ class QuestionSetService {
         throw Exception('Failed to load question sets');
       }
     } catch (e) {
-      print('Error getting question sets: $e');
+      debugPrint('Error getting question sets: $e');
       rethrow;
     }
   }
@@ -70,21 +71,40 @@ class QuestionSetService {
         throw Exception('Failed to load question set');
       }
     } catch (e) {
-      print('Error getting question set: $e');
+      debugPrint('Error getting question set: $e');
       rethrow;
     }
   }
 
   /// Create new question set
   Future<Map<String, dynamic>> createQuestionSet({
-    required String name,
+    required String title,
     String? description,
-    required List<int> questionIds,
-    String visibility = 'private',
+    required int topicId,
+    String visibility = 'PUBLIC',
+    List<Map<String, dynamic>>? questions,
+    List<int>? questionIds,
   }) async {
     try {
       final token = await _getToken();
       if (token == null) throw Exception('Not authenticated');
+
+      final body = <String, dynamic>{
+        'title': title,
+        'topicId': topicId,
+        'visibility': visibility,
+      };
+
+      if (description != null && description.isNotEmpty) {
+        body['description'] = description;
+      }
+
+      // Support both creating with inline questions or using existing question IDs
+      if (questions != null && questions.isNotEmpty) {
+        body['questions'] = questions;
+      } else if (questionIds != null && questionIds.isNotEmpty) {
+        body['questionIds'] = questionIds;
+      }
 
       final response = await http.post(
         Uri.parse('${ApiConstants.baseUrl}/question-sets'),
@@ -92,24 +112,36 @@ class QuestionSetService {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
-        body: json.encode({
-          'name': name,
-          'description': description,
-          'questionIds': questionIds,
-          'visibility': visibility,
-        }),
+        body: json.encode(body),
       );
 
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final data = json.decode(response.body);
         return data['data'];
       } else {
-        throw Exception('Failed to create question set');
+        final error = json.decode(response.body);
+        throw Exception(error['message'] ?? 'Failed to create question set');
       }
     } catch (e) {
-      print('Error creating question set: $e');
+      debugPrint('Error creating question set: $e');
       rethrow;
     }
+  }
+
+  /// Legacy method for backward compatibility
+  Future<Map<String, dynamic>> createQuestionSetLegacy({
+    required String name,
+    String? description,
+    required List<int> questionIds,
+    String visibility = 'private',
+  }) async {
+    return createQuestionSet(
+      title: name,
+      description: description,
+      topicId: 1, // Default topic
+      visibility: visibility.toUpperCase(),
+      questionIds: questionIds,
+    );
   }
 
   /// Update question set
@@ -144,7 +176,7 @@ class QuestionSetService {
         throw Exception('Failed to update question set');
       }
     } catch (e) {
-      print('Error updating question set: $e');
+      debugPrint('Error updating question set: $e');
       rethrow;
     }
   }
@@ -167,7 +199,7 @@ class QuestionSetService {
         throw Exception('Failed to delete question set');
       }
     } catch (e) {
-      print('Error deleting question set: $e');
+      debugPrint('Error deleting question set: $e');
       rethrow;
     }
   }
@@ -193,7 +225,7 @@ class QuestionSetService {
         throw Exception('Failed to clone question set');
       }
     } catch (e) {
-      print('Error cloning question set: $e');
+      debugPrint('Error cloning question set: $e');
       rethrow;
     }
   }

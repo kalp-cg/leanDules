@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
@@ -31,7 +32,7 @@ class PushNotificationService {
         throw Exception('Failed to register device');
       }
     } catch (e) {
-      print('Error registering device: $e');
+      debugPrint('Error registering device: $e');
       rethrow;
     }
   }
@@ -55,7 +56,7 @@ class PushNotificationService {
         throw Exception('Failed to remove device');
       }
     } catch (e) {
-      print('Error removing device: $e');
+      debugPrint('Error removing device: $e');
       rethrow;
     }
   }
@@ -78,7 +79,7 @@ class PushNotificationService {
         throw Exception('Failed to send test notification');
       }
     } catch (e) {
-      print('Error sending test notification: $e');
+      debugPrint('Error sending test notification: $e');
       rethrow;
     }
   }

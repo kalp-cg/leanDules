@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
@@ -30,7 +31,7 @@ class RecommendationService {
         throw Exception('Failed to get recommendations');
       }
     } catch (e) {
-      print('Error getting user recommendations: $e');
+      debugPrint('Error getting user recommendations: $e');
       rethrow;
     }
   }
@@ -58,7 +59,7 @@ class RecommendationService {
         throw Exception('Failed to get topic recommendations');
       }
     } catch (e) {
-      print('Error getting topic recommendations: $e');
+      debugPrint('Error getting topic recommendations: $e');
       rethrow;
     }
   }
@@ -86,7 +87,7 @@ class RecommendationService {
         throw Exception('Failed to get question set recommendations');
       }
     } catch (e) {
-      print('Error getting question set recommendations: $e');
+      debugPrint('Error getting question set recommendations: $e');
       rethrow;
     }
   }

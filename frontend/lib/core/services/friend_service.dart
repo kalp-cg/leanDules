@@ -148,4 +148,28 @@ class FriendService {
       return [];
     }
   }
+
+  Future<List<dynamic>> getRecommendations({int limit = 10}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final response = await _dio.get(
+        '${ApiConstants.baseUrl}/recommendations/users',
+        queryParameters: {'limit': limit},
+        options: Options(
+          headers: token != null ? {'Authorization': 'Bearer $token'} : null,
+        ),
+      );
+
+      if (response.data['success']) {
+        return response.data['data'] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error getting recommendations: $e');
+      // Fallback to popular users
+      return getUsers(sortBy: 'popular');
+    }
+  }
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
@@ -29,7 +30,7 @@ class GdprService {
         throw Exception('Failed to export user data');
       }
     } catch (e) {
-      print('Error exporting user data: $e');
+      debugPrint('Error exporting user data: $e');
       rethrow;
     }
   }
@@ -59,7 +60,7 @@ class GdprService {
         throw Exception('Failed to delete account');
       }
     } catch (e) {
-      print('Error deleting account: $e');
+      debugPrint('Error deleting account: $e');
       rethrow;
     }
   }
@@ -88,7 +89,7 @@ class GdprService {
         throw Exception('Failed to anonymize account');
       }
     } catch (e) {
-      print('Error anonymizing account: $e');
+      debugPrint('Error anonymizing account: $e');
       rethrow;
     }
   }
@@ -114,7 +115,7 @@ class GdprService {
         throw Exception('Failed to get processing activities');
       }
     } catch (e) {
-      print('Error getting processing activities: $e');
+      debugPrint('Error getting processing activities: $e');
       rethrow;
     }
   }
