@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
-import '../../providers/duel_provider.dart';
-import '../../core/services/duel_service.dart';
-import '../../core/services/socket_service.dart';
+
 import '../duel/topic_selection_screen.dart';
 import 'edit_profile_screen.dart';
 import '../friends/friends_screen.dart';
+import 'saved_questions_screen.dart';
+import 'my_contributions_screen.dart';
 import 'dart:async';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -19,15 +19,19 @@ class ProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  late Timer _refreshTimer;
+class _ProfileScreenState extends ConsumerState<ProfileScreen> with AutomaticKeepAliveClientMixin {
+  Timer? _refreshTimer;
+
+  @override
+  bool get wantKeepAlive => true; // Keep state when switching tabs
 
   bool get isCurrentUser => widget.userId == null;
 
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Reduced from 30s to 120s for smoother performance
+    _refreshTimer = Timer.periodic(const Duration(seconds: 120), (_) {
       if (mounted) {
         _refreshData();
       }
@@ -46,12 +50,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   void dispose() {
-    _refreshTimer.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final profileAsync = isCurrentUser
         ? ref.watch(userProfileProvider)
         : ref.watch(otherUserProfileProvider(widget.userId!));
@@ -111,6 +116,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const FriendsScreen(),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 8),
+                _buildActionItem('My Vault', Icons.bookmark_rounded, () {
+                   Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SavedQuestionsScreen(),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 8),
+                _buildActionItem('My Contributions', Icons.quiz_rounded, () {
+                   Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const MyContributionsScreen(),
                     ),
                   );
                 }),
