@@ -199,31 +199,7 @@ router.get('/me', authenticateToken, (req, res) => {
   });
 });
 
-// GitHub OAuth Routes
-router.get('/github', passport.authenticate('github', { scope: ['user:email'] }));
-
-router.get('/github/callback', 
-  passport.authenticate('github', { failureRedirect: '/login' }),
-  asyncHandler(async (req, res) => {
-    // Successful authentication
-    const user = req.user;
-    
-    // Generate tokens
-    const tokens = generateTokenPair({ userId: user.id, email: user.email });
-
-    // Save refresh token
-    await prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        token: tokens.refreshToken,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    // Redirect to frontend with token
-    // Note: In a real production app, consider using secure cookies or a temporary code exchange
-    res.redirect(`http://localhost:3000/auth/callback?token=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`);
-  })
-);
+// OAuth removed - Flutter web doesn't support URL schemes for OAuth redirects
+// Use email/password authentication instead
 
 module.exports = router;

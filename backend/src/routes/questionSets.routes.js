@@ -114,6 +114,34 @@ router.delete('/:id/questions/:questionId', authenticate, async (req, res, next)
   }
 });
 
+// Auto-generate quiz from topic and difficulty
+// POST /api/question-sets/generate
+router.post('/generate', authenticate, async (req, res, next) => {
+  try {
+    const { topicId, difficulty, numQuestions, name } = req.body;
+
+    if (!topicId) {
+      return res.status(400).json({
+        success: false,
+        message: 'topicId is required'
+      });
+    }
+
+    const questionSet = await questionSetService.generateQuiz(
+      { topicId, difficulty, numQuestions, name },
+      req.user.id
+    );
+
+    res.status(201).json({
+      success: true,
+      data: questionSet,
+      message: 'Quiz generated successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Clone question set
 router.post('/:id/clone', authenticate, async (req, res, next) => {
   try {

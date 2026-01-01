@@ -85,9 +85,9 @@ router.post('/flags/:id/resolve', authenticate, requireAdmin, async (req, res, n
   try {
     const { resolution, action } = req.body;
     if (!resolution || !action) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'resolution and action are required' 
+      return res.status(400).json({
+        success: false,
+        message: 'resolution and action are required'
       });
     }
     const flag = await adminService.resolveFlag(
@@ -107,9 +107,9 @@ router.post('/users/:id/suspend', authenticate, requireAdmin, async (req, res, n
   try {
     const { reason, duration } = req.body;
     if (!reason || !duration) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'reason and duration are required' 
+      return res.status(400).json({
+        success: false,
+        message: 'reason and duration are required'
       });
     }
     const user = await adminService.suspendUser(
@@ -143,6 +143,21 @@ router.get('/logs', authenticate, requireAdmin, async (req, res, next) => {
       action,
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get all users
+router.get('/users', authenticate, requireAdmin, async (req, res, next) => {
+  try {
+    const { page, limit, search } = req.query;
+    const result = await adminService.getAllUsers({
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      search,
     });
     res.json({ success: true, ...result });
   } catch (error) {
