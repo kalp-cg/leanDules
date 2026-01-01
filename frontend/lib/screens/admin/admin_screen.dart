@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
 import '../../core/services/api_service.dart';
+import '../../screens/profile/profile_screen.dart';
 
 // Provider for admin dashboard stats
 final adminStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
@@ -55,6 +56,31 @@ final moderationQueueProvider = FutureProvider.autoDispose<List<dynamic>>((ref) 
   }
 });
 
+// Provider for all users
+final allUsersProvider = FutureProvider.autoDispose<List<dynamic>>((ref) async {
+  final api = ApiService();
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('accessToken');
+  
+  if (token == null) return [];
+  
+  try {
+    final response = await api.client.get(
+      '/admin/users',
+      queryParameters: {'limit': 50}, 
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+    
+    if (response.data['success'] == true) {
+      return response.data['users'] ?? [];
+    }
+    return [];
+  } catch (e) {
+    debugPrint('Error fetching all users: $e');
+    return [];
+  }
+});
+
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key});
 
@@ -68,7 +94,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -214,22 +240,18 @@ class _AdminScreenState extends ConsumerState<AdminScreen> with SingleTickerProv
           labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w600),
           tabs: const [
             Tab(text: 'Dashboard'),
+            Tab(text: 'Users'),
             Tab(text: 'Moderation'),
           ],
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppTheme.background, Color(0xFF0F1228)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+        color: AppTheme.background,
         child: TabBarView(
           controller: _tabController,
           children: [
             _buildDashboard(),
+            _buildUsersList(),
             _buildModerationQueue(),
           ],
         ),
@@ -535,6 +557,99 @@ class _AdminScreenState extends ConsumerState<AdminScreen> with SingleTickerProv
             ],
           ),
         ],
+      ),
+    );
+  }
+  Widget _buildUsersList() {
+    final usersAsync = ref.watch(allUsersProvider);
+
+    return usersAsync.when(
+      data: (users) {
+        if (users.isEmpty) {
+          return Center(
+            child: Text('No users found', style: GoogleFonts.outfit(color: AppTheme.textSecondary)),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(allUsersProvider),
+          color: AppTheme.secondary,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: users.length,
+            itemBuilder: (context, index) {
+              final user = users[index];
+              return _buildUserListItem(user);
+            },
+          ),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator(color: AppTheme.secondary)),
+      error: (e, s) => Center(child: Text('Error loading users', style: GoogleFonts.outfit(color: AppTheme.textSecondary))),
+    );
+  }
+
+  Widget _buildUserListItem(Map<String, dynamic> user) {
+    final username = user['username'] ?? 'Unknown';
+    final email = user['email'] ?? '';
+    final role = user['role'] ?? 'user';
+    final isActive = user['isActive'] ?? true;
+    final avatarUrl = user['avatarUrl'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border.withValues(alpha: 0.3)),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: CircleAvatar(
+          backgroundColor: AppTheme.primary,
+          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+          child: avatarUrl == null ? Text(username[0].toUpperCase(), style: GoogleFonts.outfit(color: Colors.white)) : null,
+        ),
+        title: Text(username, style: GoogleFonts.outfit(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(email, style: GoogleFonts.outfit(color: AppTheme.textMuted, fontSize: 13)),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: role == 'admin' ? AppTheme.secondary.withValues(alpha: 0.2) : AppTheme.surface,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: role == 'admin' ? AppTheme.secondary : AppTheme.border.withValues(alpha: 0.5)),
+                  ),
+                  child: Text(role.toUpperCase(), style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: role == 'admin' ? AppTheme.secondary : AppTheme.textSecondary)),
+                ),
+                const SizedBox(width: 8),
+                if (!isActive)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.error.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text('SUSPENDED', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.error)),
+                  ),
+              ],
+            ),
+          ],
+        ),
+        trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textMuted),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProfileScreen(userId: user['id']),
+            ),
+          );
+        },
       ),
     );
   }

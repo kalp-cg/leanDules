@@ -70,7 +70,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     // Check auth in parallel
     final authService = ref.read(authServiceProvider);
+    
+    // Check if user is already logged in
     final isLoggedIn = await authService.isLoggedIn();
+    
+    debugPrint('🔐 Auth Check: isLoggedIn = $isLoggedIn');
 
     // Wait for animation to complete + small buffer
     await Future.delayed(const Duration(milliseconds: 2200));

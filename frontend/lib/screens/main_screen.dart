@@ -97,6 +97,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   void _showInvitationDialog(dynamic data) {
+    // Extract challenger name safely
+    final challengerName = data['challenger'] != null 
+        ? (data['challenger']['fullName'] ?? data['challenger']['username'] ?? 'Someone')
+        : 'Someone';
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -125,7 +130,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           ],
         ),
         content: Text(
-          '${data['challengerEmail'] ?? 'Someone'} wants to duel you!',
+          '$challengerName wants to duel you!',
           style: GoogleFonts.outfit(
             color: AppTheme.textSecondary,
             fontSize: 15,
@@ -136,9 +141,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             onPressed: () {
               // Decline
               final socketService = ref.read(socketServiceProvider);
-              socketService.emit('duel:decline', {
+              socketService.emit('challenge:decline', {
                 'challengeId': data['challengeId'],
-                'challengerId': data['challengerId'],
               });
               Navigator.pop(context);
             },
@@ -161,53 +165,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               onPressed: () async {
                 // Accept
                 final socketService = ref.read(socketServiceProvider);
-                socketService.emit('duel:accept', {
+                socketService.emit('challenge:accept', {
                   'challengeId': data['challengeId'],
-                  'challengerId': data['challengerId'],
                 });
                 Navigator.pop(context);
 
-                try {
-                  // Fetch duel details
-                  final duelId = data['duelId'];
-                  if (duelId != null) {
-                    final duelData = await ref
-                        .read(duelServiceProvider)
-                        .getDuel(duelId);
-                    ref.read(duelStateProvider.notifier).setDuelData(duelData);
-
-                    if (context.mounted) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const DuelScreen(),
-                        ),
-                      );
-                    }
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Error: Missing duel ID',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w500),
-                        ),
-                        backgroundColor: AppTheme.error,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Failed to load duel: $e',
-                          style: GoogleFonts.outfit(fontWeight: FontWeight.w500),
-                        ),
-                        backgroundColor: AppTheme.error,
-                      ),
-                    );
-                  }
-                }
+                // Navigation will be handled by 'challenge:started' listener
+                // in DuelProvider or MainScreen
               },
               child: Text(
                 'Accept',
@@ -226,7 +190,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   @override
   void dispose() {
     final socketService = ref.read(socketServiceProvider);
-    socketService.off('duel:invitation_received');
+    socketService.off('challenge:received');
     socketService.off('duel:accepted');
     socketService.disconnect();
     super.dispose();
