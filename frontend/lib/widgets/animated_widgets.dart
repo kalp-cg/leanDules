@@ -33,9 +33,10 @@ class _AnimatedActionButtonState extends State<AnimatedActionButton>
       duration: const Duration(milliseconds: 150),
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.95,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -56,25 +57,33 @@ class _AnimatedActionButtonState extends State<AnimatedActionButton>
       child: AnimatedBuilder(
         animation: _scaleAnimation,
         builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: child,
-          );
+          return Transform.scale(scale: _scaleAnimation.value, child: child);
         },
         child: Container(
-          height: 130,
+          height: 140,
           decoration: BoxDecoration(
-            color: AppTheme.surfaceLight,
-            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              colors: [Colors.white, widget.color.withValues(alpha: 0.03)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: widget.color.withValues(alpha: 0.25),
-              width: 1.5,
+              color: widget.color.withValues(alpha: 0.15),
+              width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: widget.color.withValues(alpha: 0.15),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: widget.color.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+                spreadRadius: 0,
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+                spreadRadius: 0,
               ),
             ],
           ),
@@ -82,31 +91,35 @@ class _AnimatedActionButtonState extends State<AnimatedActionButton>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      widget.color.withValues(alpha: 0.2),
-                      widget.color.withValues(alpha: 0.1),
+                      widget.color.withValues(alpha: 0.15),
+                      widget.color.withValues(alpha: 0.08),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: Icon(
-                  widget.icon,
-                  color: widget.color,
-                  size: 28,
-                ),
+                child: Icon(widget.icon, color: widget.color, size: 32),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Text(
                 widget.text,
                 style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
                   color: AppTheme.textPrimary,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],
@@ -145,9 +158,10 @@ class _AnimatedStatsCounterState extends State<AnimatedStatsCounter>
   void initState() {
     super.initState();
     _controller = AnimationController(duration: widget.duration, vsync: this);
-    _animation = IntTween(begin: 0, end: widget.targetValue).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    _animation = IntTween(
+      begin: 0,
+      end: widget.targetValue,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
   }
 
@@ -175,7 +189,8 @@ class _AnimatedStatsCounterState extends State<AnimatedStatsCounter>
       builder: (context, child) {
         return Text(
           '${_animation.value}${widget.suffix}',
-          style: widget.style ??
+          style:
+              widget.style ??
               GoogleFonts.outfit(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -192,11 +207,7 @@ class PulsingRankBadge extends StatefulWidget {
   final int rank;
   final Color color;
 
-  const PulsingRankBadge({
-    super.key,
-    required this.rank,
-    required this.color,
-  });
+  const PulsingRankBadge({super.key, required this.rank, required this.color});
 
   @override
   State<PulsingRankBadge> createState() => _PulsingRankBadgeState();
@@ -214,10 +225,11 @@ class _PulsingRankBadgeState extends State<PulsingRankBadge>
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     )..repeat(reverse: true);
-    
-    _glowAnimation = Tween<double>(begin: 0.2, end: 0.5).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+
+    _glowAnimation = Tween<double>(
+      begin: 0.2,
+      end: 0.5,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -273,17 +285,16 @@ class _PulsingRankBadgeState extends State<PulsingRankBadge>
             borderRadius: BorderRadius.circular(10),
             boxShadow: [
               BoxShadow(
-                color: widget.color.withValues(alpha: _glowAnimation.value * 0.6),
+                color: widget.color.withValues(
+                  alpha: _glowAnimation.value * 0.6,
+                ),
                 blurRadius: 12,
                 spreadRadius: 0,
               ),
             ],
           ),
           child: Center(
-            child: Text(
-              _medalEmoji,
-              style: const TextStyle(fontSize: 18),
-            ),
+            child: Text(_medalEmoji, style: const TextStyle(fontSize: 18)),
           ),
         );
       },
@@ -313,10 +324,11 @@ class _StreakBadgeState extends State<StreakBadge>
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     )..repeat(reverse: true);
-    
-    _bounceAnimation = Tween<double>(begin: 0, end: -4).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+
+    _bounceAnimation = Tween<double>(
+      begin: 0,
+      end: -4,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -396,9 +408,7 @@ class DailyChallengeBanner extends StatelessWidget {
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.accent.withValues(alpha: 0.3),
-          ),
+          border: Border.all(color: AppTheme.accent.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
