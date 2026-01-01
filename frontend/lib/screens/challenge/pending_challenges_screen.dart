@@ -75,7 +75,7 @@ class _PendingChallengesScreenState extends ConsumerState<PendingChallengesScree
     final token = prefs.getString('accessToken');
     
     try {
-      await api.client.post(
+      final response = await api.client.post(
         '/challenges/$challengeId/accept',
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
@@ -83,14 +83,25 @@ class _PendingChallengesScreenState extends ConsumerState<PendingChallengesScree
       ref.invalidate(pendingChallengesProvider);
       
       if (mounted) {
-        // Navigate to play the challenge
+        final data = response.data['data'];
+        final duelId = data['duelId']; // Note: ensure backend returns duelId
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Challenge accepted! Starting quiz...', style: GoogleFonts.outfit()),
             backgroundColor: AppTheme.success,
           ),
         );
-        // TODO: Navigate to quiz play screen with challenge ID
+        
+        if (duelId != null) {
+           Navigator.pushNamed(
+             context, 
+             '/duel',
+             arguments: {'duelId': duelId}
+           );
+        } else {
+           debugPrint('Warning: No duelId returned from accept challenge');
+        }
       }
     } catch (e) {
       if (mounted) {
