@@ -19,6 +19,7 @@ class FriendService {
     int page = 1,
     String search = '',
     String sortBy = 'newest',
+    int limit = 20,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -26,7 +27,12 @@ class FriendService {
 
       final response = await _dio.get(
         '${ApiConstants.baseUrl}/users',
-        queryParameters: {'page': page, 'search': search, 'sortBy': sortBy},
+        queryParameters: {
+          'page': page,
+          'search': search,
+          'sortBy': sortBy,
+          'limit': limit,
+        },
         options: Options(
           headers: token != null ? {'Authorization': 'Bearer $token'} : null,
         ),
@@ -112,8 +118,9 @@ class FriendService {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('accessToken');
 
-      final response = await _dio.post(
-        '${ApiConstants.baseUrl}/users/$userId/unfollow',
+      // Backend uses DELETE /:id/follow (not POST to /unfollow)
+      final response = await _dio.delete(
+        '${ApiConstants.baseUrl}/users/$userId/follow',
         options: Options(
           headers: token != null ? {'Authorization': 'Bearer $token'} : null,
         ),
