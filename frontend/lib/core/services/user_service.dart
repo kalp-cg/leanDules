@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,11 @@ class UserService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('accessToken');
+
+      if (token == null) {
+        debugPrint('❌ No access token found in getProfile');
+        return null;
+      }
 
       final response = await _dio.get(
         ApiConstants.me,
@@ -73,6 +79,38 @@ class UserService {
     }
   }
 
+  /// Upload avatar image (for local file uploads)
+  /// Returns the new avatar URL if successful, null otherwise
+  Future<String?> uploadAvatar(Uint8List bytes, String filename) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final formData = FormData.fromMap({
+        'avatar': MultipartFile.fromBytes(bytes, filename: filename),
+      });
+
+      final response = await _dio.post(
+        '${ApiConstants.users}/avatar',
+        data: formData,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
+      if (response.data['success'] == true) {
+        return response.data['data']?['avatarUrl'];
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error uploading avatar: $e');
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> getUserById(int id) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -94,7 +132,7 @@ class UserService {
   }
 
   /// Follow a user
-  Future<bool> followUser(int userId) async {
+  Future<Map<String, dynamic>> followUser(int userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('accessToken');
@@ -104,10 +142,18 @@ class UserService {
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
 
-      return response.data['success'] == true;
+      return {
+        'success': response.data['success'] == true,
+        'status': response.data['data']?['status'] ?? 'unknown',
+        'message': response.data['message'] ?? 'Request sent',
+      };
     } catch (e) {
       debugPrint('Error following user: $e');
-      return false;
+      return {
+        'success': false,
+        'status': 'error',
+        'message': 'Failed to send follow request',
+      };
     }
   }
 
@@ -168,6 +214,71 @@ class UserService {
     } catch (e) {
       debugPrint('Error getting following: $e');
       return [];
+    }
+  }
+
+  /// Get pending follow requests (received)
+  Future<List<dynamic>> getPendingFollowRequests() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      debugPrint('📥 Fetching follow requests...');
+
+      final response = await _dio.get(
+        '${ApiConstants.users}/follow-requests',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      debugPrint('✅ Follow requests response: ${response.data}');
+
+      if (response.data['success']) {
+        return response.data['data'] ?? [];
+      }
+      return [];
+    } catch (e) {
+      debugPrint('❌ Error getting follow requests: $e');
+      if (e is DioException) {
+        debugPrint('Response data: ${e.response?.data}');
+        debugPrint('Status code: ${e.response?.statusCode}');
+      }
+      return [];
+    }
+  }
+
+  /// Accept follow request
+  Future<bool> acceptFollowRequest(int userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final response = await _dio.post(
+        '${ApiConstants.users}/$userId/follow/accept',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      return response.data['success'] == true;
+    } catch (e) {
+      debugPrint('Error accepting follow request: $e');
+      return false;
+    }
+  }
+
+  /// Decline follow request
+  Future<bool> declineFollowRequest(int userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('accessToken');
+
+      final response = await _dio.post(
+        '${ApiConstants.users}/$userId/follow/decline',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+
+      return response.data['success'] == true;
+    } catch (e) {
+      debugPrint('Error declining follow request: $e');
+      return false;
     }
   }
 

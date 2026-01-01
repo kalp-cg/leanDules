@@ -50,7 +50,18 @@ class AuthService {
       await prefs.setString('accessToken', accessToken);
       await prefs.setString('refreshToken', refreshToken);
 
-      debugPrint('✅ Tokens saved successfully');
+      // Save user info if available
+      final user = data['user'];
+      if (user != null) {
+        if (user['id'] != null)
+          await prefs.setString('userId', user['id'].toString());
+        if (user['email'] != null)
+          await prefs.setString('userEmail', user['email']);
+        if (user['fullName'] != null)
+          await prefs.setString('userName', user['fullName']);
+      }
+
+      debugPrint('✅ Tokens and user info saved successfully');
       return null; // No error
     } on DioException catch (e) {
       debugPrint('❌ DioException: ${e.message}');
@@ -106,6 +117,17 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('accessToken', accessToken);
       await prefs.setString('refreshToken', refreshToken);
+
+      // Save user info if available
+      final user = data['user'];
+      if (user != null) {
+        if (user['id'] != null)
+          await prefs.setString('userId', user['id'].toString());
+        if (user['email'] != null)
+          await prefs.setString('userEmail', user['email']);
+        if (user['fullName'] != null)
+          await prefs.setString('userName', user['fullName']);
+      }
 
       return null;
     } on DioException catch (e) {

@@ -60,7 +60,19 @@ class SocketService {
     if (_socket != null && _socket!.connected) {
       _socket!.emit(event, data);
     } else {
-      debugPrint('Cannot emit $event: Socket not connected');
+      debugPrint('⚠️ Socket not connected for $event - Attempting reconnect...');
+      // Try to reconnect and then emit
+      connect().then((_) {
+        // Wait a bit for connection to establish
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (_socket != null && _socket!.connected) {
+            debugPrint('✅ Reconnected! Emitting $event');
+            _socket!.emit(event, data);
+          } else {
+            debugPrint('❌ Reconnect failed for $event');
+          }
+        });
+      });
     }
   }
 
