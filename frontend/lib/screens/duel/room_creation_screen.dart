@@ -16,6 +16,7 @@ class _RoomCreationScreenState extends ConsumerState<RoomCreationScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _roomCodeController = TextEditingController();
+  int _questionCount = 7; // Default 7 questions
 
   @override
   void initState() {
@@ -76,11 +77,42 @@ class _RoomCreationScreenState extends ConsumerState<RoomCreationScreen>
                     style: TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 32),
+
+                  // Question Count Selection
+                  const Text(
+                    'Number of Questions',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    children: [5, 7, 10, 15].map((count) {
+                      final isSelected = _questionCount == count;
+                      return ChoiceChip(
+                        label: Text('$count'),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() => _questionCount = count);
+                          }
+                        },
+                        selectedColor: Colors.blue,
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 32),
                   ElevatedButton(
                     onPressed: () {
                       ref
                           .read(duelStateProvider.notifier)
-                          .createRoom(widget.categoryId);
+                          .createRoom(
+                            widget.categoryId,
+                            questionCount: _questionCount,
+                          );
                     },
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
