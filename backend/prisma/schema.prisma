@@ -35,10 +35,12 @@ model User {
   passwordResetToken         String?                   @map("password_reset_token") @db.VarChar(255)
   questionsSolved            Int                       @default(0) @map("questions_solved")
   quizzesCompleted           Int                       @default(0) @map("quizzes_completed")
+  deletedAt                  DateTime?                 @map("deleted_at") @db.Timestamp(6)
   activities                 Activity[]
   attempts                   Attempt[]
   challengesReceived         ChallengeParticipant[]
   challengesCreated          Challenge[]               @relation("ChallengerChallenges")
+  challengesWon              Challenge[]               @relation("WinnerChallenges")
   conversationParticipations ConversationParticipant[]
   duelAnswers                DuelAnswer[]
   duelsAsPlayer1             Duel[]                    @relation("Player1Duels")
@@ -51,10 +53,9 @@ model User {
   questions                  Question[]
   refreshTokens              RefreshToken[]
   reports                    Report[]
+  savedQuestions             SavedQuestion[]
   followers                  UserFollower[]            @relation("UserFollowers")
   following                  UserFollower[]            @relation("UserFollowing")
-  challengesWon              Challenge[]               @relation("WinnerChallenges")
-  savedQuestions             SavedQuestion[]
 
   @@map("users")
 }
@@ -65,9 +66,8 @@ model SavedQuestion {
   questionId Int      @map("question_id")
   savedAt    DateTime @default(now()) @map("saved_at") @db.Timestamp(6)
   note       String?
-
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, questionId])
   @@map("saved_questions")
@@ -77,6 +77,7 @@ model UserFollower {
   id          Int      @id @default(autoincrement())
   followerId  Int      @map("follower_id")
   followingId Int      @map("following_id")
+  status      String   @default("accepted") @db.VarChar(20) // pending, accepted, declined
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   follower    User     @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
   following   User     @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
@@ -113,6 +114,7 @@ model Question {
   timeLimit        Int               @default(30) @map("time_limit")
   type             String            @default("mcq") @db.VarChar(20)
   updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt        DateTime?         @map("deleted_at") @db.Timestamp(6)
   duelQuestions    DuelQuestion[]
   flags            Flag[]
   questionSetItems QuestionSetItem[]
@@ -142,6 +144,7 @@ model QuestionSet {
   visibility  String            @default("private") @db.VarChar(20)
   createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt   DateTime?         @map("deleted_at") @db.Timestamp(6)
   attempts    Attempt[]
   challenges  Challenge[]
   items       QuestionSetItem[]
@@ -172,10 +175,10 @@ model Challenge {
   createdAt     DateTime               @default(now()) @map("created_at") @db.Timestamp(6)
   completedAt   DateTime?              @map("completed_at") @db.Timestamp(6)
   winnerId      Int?                   @map("winner_id")
-  winner        User?                  @relation("WinnerChallenges", fields: [winnerId], references: [id])
   participants  ChallengeParticipant[]
   challenger    User                   @relation("ChallengerChallenges", fields: [challengerId], references: [id])
   questionSet   QuestionSet?           @relation(fields: [questionSetId], references: [id])
+  winner        User?                  @relation("WinnerChallenges", fields: [winnerId], references: [id])
   duel          Duel?
 
   @@map("challenges")
