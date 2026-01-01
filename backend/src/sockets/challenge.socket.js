@@ -107,9 +107,9 @@ function registerEvents(socket, io) {
             select: { id: true, fullName: true, avatarUrl: true, rating: true },
           },
           questionSet: {
-            select: { 
-              id: true, 
-              name: true, 
+            select: {
+              id: true,
+              name: true,
               items: {
                 select: { questionId: true }
               }
@@ -124,22 +124,22 @@ function registerEvents(socket, io) {
       } else {
         // Generate random questions based on settings
         const { numQuestions = 10, difficulty = 'medium', topicIds = [] } = fullChallenge.settings || {};
-        
+
         const where = {
-            status: 'published',
+          status: 'published',
         };
-        
+
         if (difficulty) where.difficulty = difficulty;
         if (topicIds && topicIds.length > 0) {
-            where.topicId = { in: topicIds };
+          where.topicId = { in: topicIds };
         }
 
         const randomQuestions = await prisma.question.findMany({
-            where,
-            take: parseInt(numQuestions),
-            select: { id: true }
+          where,
+          take: parseInt(numQuestions),
+          select: { id: true }
         });
-        
+
         questionIds = randomQuestions.map(q => q.id);
       }
 
@@ -213,17 +213,17 @@ function registerEvents(socket, io) {
         timeLimit: fullChallenge.settings.timeLimit,
         currentQuestion: 0,
         questions: questions.map(q => {
-            // Handle options format (array of objects or simple array)
-            const opts = Array.isArray(q.options) ? q.options : [];
-            return {
-                id: q.id,
-                questionText: q.content,
-                optionA: opts[0]?.text || opts[0] || '',
-                optionB: opts[1]?.text || opts[1] || '',
-                optionC: opts[2]?.text || opts[2] || '',
-                optionD: opts[3]?.text || opts[3] || '',
-                timeLimit: q.timeLimit
-            };
+          // Handle options format (array of objects or simple array)
+          const opts = Array.isArray(q.options) ? q.options : [];
+          return {
+            id: q.id,
+            questionText: q.content,
+            optionA: opts[0]?.text || opts[0] || '',
+            optionB: opts[1]?.text || opts[1] || '',
+            optionC: opts[2]?.text || opts[2] || '',
+            optionD: opts[3]?.text || opts[3] || '',
+            timeLimit: q.timeLimit
+          };
         }),
       });
 
@@ -299,7 +299,11 @@ function registerEvents(socket, io) {
         select: { correctAnswer: true },
       });
 
-      const isCorrect = question.correctAnswer === selectedAnswer;
+      const dbAnswer = question.correctAnswer ? question.correctAnswer.toString().trim().toUpperCase() : '';
+      const userAnswer = selectedAnswer ? selectedAnswer.toString().trim().toUpperCase() : '';
+
+      console.log(`[CHALLENGE_DEBUG] Q=${questionId} | DB="${dbAnswer}" | User="${userAnswer}"`);
+      const isCorrect = dbAnswer === userAnswer;
 
       // Update room state
       room.answers[socket.userId].push({
@@ -311,7 +315,7 @@ function registerEvents(socket, io) {
       });
 
       if (isCorrect) {
-        room.scores[socket.userId]++;
+        room.scores[socket.userId] += (1000 - Math.min(timeTaken * 10, 500)); // Dynamic scoring
       }
 
       // Notify opponent about progress (without revealing answer)
@@ -334,7 +338,7 @@ function registerEvents(socket, io) {
 
       // Check if both players answered this question
       const bothAnswered = room.answers[room.players[0]].length === room.currentQuestion + 1 &&
-                          room.answers[room.players[1]].length === room.currentQuestion + 1;
+        room.answers[room.players[1]].length === room.currentQuestion + 1;
 
       if (bothAnswered) {
         room.currentQuestion++;
