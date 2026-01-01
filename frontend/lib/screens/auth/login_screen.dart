@@ -275,6 +275,52 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                             const SizedBox(height: 28),
                             
+                            // Social login buttons
+                            Row(
+                              children: [
+                                // Google login
+                                Expanded(
+                                  child: _buildSocialButton(
+                                    icon: Icons.g_mobiledata_rounded,
+                                    label: 'Google',
+                                    color: const Color(0xFFDB4437),
+                                    onTap: () async {
+                                      // TODO: Implement Google OAuth
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Google login coming soon!',
+                                            style: GoogleFonts.outfit(),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                // GitHub login
+                                Expanded(
+                                  child: _buildSocialButton(
+                                    icon: Icons.code_rounded,
+                                    label: 'GitHub',
+                                    color: const Color(0xFF333333),
+                                    onTap: () async {
+                                      // TODO: Implement GitHub OAuth
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'GitHub login coming soon!',
+                                            style: GoogleFonts.outfit(),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            
                             // Sign up link
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -319,6 +365,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppTheme.border.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

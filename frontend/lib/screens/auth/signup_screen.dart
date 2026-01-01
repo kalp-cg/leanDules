@@ -39,8 +39,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           );
 
       if (success && mounted) {
-        // Navigate to Home
-        Navigator.pushReplacementNamed(context, '/home');
+        // Navigate to Interests Selection for new users
+        Navigator.pushReplacementNamed(context, '/interests');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Account created successfully!')),
         );
