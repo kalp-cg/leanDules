@@ -35,7 +35,7 @@ function transformQuestion(q) {
  */
 async function createDuel(player1Id, player2Id, settings = {}) {
   try {
-    const { categoryId, difficultyId, questionCount = 10 } = settings;
+    const { categoryId, difficultyId, questionCount = 7 } = settings;
 
     // Create challenge first (Required by schema)
     const challenge = await prisma.challenge.create({
@@ -338,7 +338,11 @@ async function submitAnswer(duelId, playerId, questionId, selectedOption, timeTa
     }
 
     // Skipped answers are always wrong
-    const isCorrect = isSkipped ? false : question.correctOption === selectedOption;
+    const dbAnswer = question.correctAnswer ? question.correctAnswer.toString().trim().toUpperCase() : '';
+    const userAnswer = selectedOption ? selectedOption.toString().trim().toUpperCase() : '';
+
+    console.log(`[DEBUG_ROBUST] Q=${questionId} | DB="${dbAnswer}" | User="${userAnswer}"`);
+    const isCorrect = isSkipped ? false : dbAnswer === userAnswer;
 
     // Save answer
     const answer = await prisma.duelAnswer.create({

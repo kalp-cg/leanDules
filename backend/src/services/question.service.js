@@ -92,7 +92,9 @@ async function getQuestions(filters = {}, options = {}) {
   }
 
   try {
-    const where = {};
+    const where = {
+      deletedAt: null, // Exclude soft-deleted questions
+    };
 
     if (topicId) {
       where.topics = {
@@ -166,8 +168,11 @@ async function getQuestionById(id, userId = null, includeAnswer = false) {
   }
 
   try {
-    const question = await prisma.question.findUnique({
-      where: { id: parseInt(id) },
+    const question = await prisma.question.findFirst({
+      where: { 
+        id: parseInt(id),
+        deletedAt: null // Exclude soft-deleted
+      },
       include: {
         topics: {
           include: {
@@ -248,7 +253,7 @@ async function updateQuestion(questionId, updateData, authorId) {
 }
 
 /**
- * Delete question
+ * Delete question (soft delete)
  */
 async function deleteQuestion(questionId, authorId) {
   try {
@@ -264,8 +269,10 @@ async function deleteQuestion(questionId, authorId) {
       throw createError.forbidden('Not authorized to delete this question');
     }
 
-    await prisma.question.delete({
+    // Soft delete instead of hard delete
+    await prisma.question.update({
       where: { id: parseInt(questionId) },
+      data: { deletedAt: new Date() },
     });
 
     // Invalidate questions cache
@@ -285,7 +292,10 @@ async function deleteQuestion(questionId, authorId) {
 async function getRandomQuestions(filters = {}, count = 10) {
   try {
     const { categoryId, difficultyId } = filters;
-    const where = {};
+    const where = {
+      deletedAt: null,
+      status: 'published'
+    };
 
     if (categoryId) {
       where.topics = {
@@ -309,7 +319,15 @@ async function getRandomQuestions(filters = {}, count = 10) {
     // But for now, using findMany with random skip/take or shuffle in app
     // Since Prisma doesn't support ORDER BY RANDOM() easily across DBs
 
-    const totalCount = await prisma.question.count({ where });
+    let totalCount = await prisma.question.count({ where });
+
+    // FALLBACK: If no questions found for specific difficulty, try ANY difficulty for this category
+    if (totalCount === 0 && where.difficulty) {
+      console.log(`No questions found for difficulty ${where.difficulty}, falling back to any difficulty.`);
+      delete where.difficulty;
+      totalCount = await prisma.question.count({ where });
+    }
+
     const take = Math.min(count * 2, totalCount);
     const skip = Math.max(0, Math.floor(Math.random() * (totalCount - take)));
 

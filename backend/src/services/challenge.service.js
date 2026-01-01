@@ -6,6 +6,8 @@ const prisma = new PrismaClient();
  * Challenge Service - Handles both async and instant (real-time) challenges
  * PRD Requirement: Asynchronous and instant duel challenges
  */
+const questionService = require('./question.service');
+
 
 class ChallengeService {
   /**
@@ -230,7 +232,63 @@ class ChallengeService {
       },
     });
 
-    return updated;
+    // Create Duel if not exists (Upgrade to Real-time Game)
+    let duel = await prisma.duel.findUnique({ where: { challengeId: parseInt(id) } });
+
+    if (!duel) {
+      console.log(`DEBUG: Creating Duel for Accepted Challenge ${id}`);
+
+      // 1. Get Questions
+      let questions = [];
+      if (challenge.questionSetId) {
+        const qSet = await prisma.questionSet.findUnique({
+          where: { id: challenge.questionSetId },
+          include: { items: { include: { question: true } } }
+        });
+        questions = qSet ? qSet.items.map(i => i.question) : [];
+      } else {
+        const { topicIds, difficulty, questionCount } = challenge.settings || {};
+        const categoryId = topicIds && topicIds.length > 0 ? topicIds[0] : null;
+
+        questions = await questionService.getRandomQuestions({
+          categoryId,
+          difficultyId: difficulty
+        }, questionCount || 5);
+      }
+
+      if (questions.length > 0) {
+        // 2. Create Duel
+        // Note: For multi-player challenges, this simple model assumes 1v1 (challenger vs acceptor)
+        // If multiple serve acceptors, we might need multiple duels or a multi-player duel model.
+        // Current Schema has player1Id, player2Id.
+        duel = await prisma.duel.create({
+          data: {
+            challengeId: challenge.id,
+            player1Id: challenge.challengerId,
+            player2Id: participant.userId,
+            status: 'active'
+          }
+        });
+
+        // 3. Link Questions
+        await Promise.all(
+          questions.map((q, index) =>
+            prisma.duelQuestion.create({
+              data: {
+                duelId: duel.id,
+                questionId: q.id,
+                orderIndex: index + 1,
+              },
+            })
+          )
+        );
+        console.log(`DEBUG: Created Duel ${duel.id} with ${questions.length} questions`);
+      } else {
+        console.warn(`WARN: No questions found for Challenge ${id}, Duel not created.`);
+      }
+    }
+
+    return { ...updated, duelId: duel ? duel.id : null };
   }
 
   /**

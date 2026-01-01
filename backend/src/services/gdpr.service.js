@@ -220,6 +220,7 @@ class GdprService {
 
   /**
    * Delete user account and all associated data (GDPR Article 17)
+   * Implements soft-delete for audit purposes
    * @param {number} userId - User ID
    * @param {string} password - User password for verification
    * @returns {Promise<Object>} Deletion result
@@ -228,7 +229,7 @@ class GdprService {
     // Verify user and password
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, password: true }
+      select: { id: true, passwordHash: true }
     });
 
     if (!user) {
@@ -236,89 +237,40 @@ class GdprService {
     }
 
     const bcrypt = require('bcryptjs');
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
     if (!isValidPassword) {
       throw new Error('Invalid password');
     }
 
-    // Delete all user data in correct order (respecting foreign keys)
+    // Soft delete user account and associated data
     await prisma.$transaction(async (tx) => {
-      // Delete user's answers
-      await tx.duelAnswer.deleteMany({ where: { userId } });
-      
-      // Delete user's attempt answers
-      await tx.attemptAnswer.deleteMany({ where: { attempt: { userId } } });
-      
-      // Delete user's attempts
-      await tx.attempt.deleteMany({ where: { userId } });
-      
-      // Delete challenge participations
-      await tx.challengeParticipant.deleteMany({ where: { userId } });
-      
-      // Delete challenges created by user
-      await tx.challenge.deleteMany({ where: { challengerId: userId } });
-      
-      // Delete duels (as creator or opponent)
-      await tx.duel.deleteMany({
-        where: {
-          OR: [
-            { creatorId: userId },
-            { opponentId: userId }
-          ]
-        }
-      });
-      
-      // Delete notifications
-      await tx.notification.deleteMany({ where: { userId } });
-      
-      // Delete flags submitted
-      await tx.flag.deleteMany({ where: { userId } });
-      
-      // Delete leaderboard entries
-      await tx.leaderboardEntry.deleteMany({ where: { userId } });
-      
-      // Delete question set items for user's sets
-      const userQuestionSets = await tx.questionSet.findMany({
+      // Soft delete user's questions
+      await tx.question.updateMany({ 
         where: { authorId: userId },
-        select: { id: true }
-      });
-      const questionSetIds = userQuestionSets.map(qs => qs.id);
-      await tx.questionSetItem.deleteMany({
-        where: { questionSetId: { in: questionSetIds } }
+        data: { deletedAt: new Date() }
       });
       
-      // Delete question sets
-      await tx.questionSet.deleteMany({ where: { authorId: userId } });
+      // Soft delete question sets
+      await tx.questionSet.updateMany({ 
+        where: { authorId: userId },
+        data: { deletedAt: new Date() }
+      });
       
-      // Remove user from question topics
-      await tx.$executeRaw`DELETE FROM question_topics WHERE question_id IN (SELECT id FROM questions WHERE author_id = ${userId})`;
-      
-      // Delete questions
-      await tx.question.deleteMany({ where: { authorId: userId } });
-      
-      // Delete follows (as follower and following)
-      await tx.userFollower.deleteMany({
-        where: {
-          OR: [
-            { followerId: userId },
-            { followingId: userId }
-          ]
+      // Soft delete the user account
+      await tx.user.update({ 
+        where: { id: userId },
+        data: { 
+          deletedAt: new Date(),
+          isActive: false,
+          email: `deleted_${userId}@deleted.com`, // Prevent email conflicts
+          username: `deleted_user_${userId}` // Prevent username conflicts
         }
       });
-      
-      // Delete refresh tokens
-      await tx.refreshToken.deleteMany({ where: { userId } });
-      
-      // Delete user activity (if exists)
-      await tx.$executeRawUnsafe(`DELETE FROM user_activity WHERE user_id = ${userId}`);
-      
-      // Finally, delete the user
-      await tx.user.delete({ where: { id: userId } });
     });
 
     return {
       success: true,
-      message: 'User account and all associated data have been permanently deleted',
+      message: 'User account has been deactivated and marked for deletion',
       deletedAt: new Date().toISOString()
     };
   }

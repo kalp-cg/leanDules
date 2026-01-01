@@ -93,8 +93,12 @@ async function login(credentials) {
   const { email, password } = credentials;
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const user = await prisma.user.findFirst({
+      where: { 
+        email,
+        deletedAt: null, // Exclude soft-deleted users
+        isActive: true
+      },
       select: {
         id: true,
         username: true,

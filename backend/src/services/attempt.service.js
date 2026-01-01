@@ -65,29 +65,43 @@ class AttemptService {
             topicId: parseInt(topicId)
           }
         },
-        difficulty: difficulty.toLowerCase()
+        difficulty: difficulty ? difficulty.toLowerCase() : undefined,
+        status: 'published',
+        deletedAt: null,
       },
-      take: 10,
+      take: 15, // Fetch 15 questions
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
 
     if (questions.length === 0) {
-      // Fallback: try to find any questions for the topic if difficulty match fails
+      // Fallback: try without difficulty filter
       const anyQuestions = await prisma.question.findMany({
         where: {
           topics: {
             some: {
               topicId: parseInt(topicId)
             }
-          }
+          },
+          status: 'published',
+          deletedAt: null,
         },
-        take: 10,
+        take: 15,
+        orderBy: {
+          createdAt: 'desc'
+        }
       });
       
       if (anyQuestions.length === 0) {
-         throw new Error('No questions found for this topic');
+         throw new Error('No questions found for this topic. Please add questions first.');
       }
       questions.push(...anyQuestions);
     }
+
+    // Shuffle and take 10 questions
+    const shuffled = questions.sort(() => Math.random() - 0.5);
+    const selectedQuestions = shuffled.slice(0, Math.min(10, shuffled.length));
 
     const attempt = await prisma.attempt.create({
       data: {
@@ -100,13 +114,14 @@ class AttemptService {
 
     return {
       attemptId: attempt.id,
-      questions: questions.map(q => ({
+      questions: selectedQuestions.map(q => ({
         id: q.id,
         content: q.content,
         options: q.options,
         type: q.type,
         difficulty: q.difficulty,
         explanation: q.explanation,
+        correctAnswer: q.correctAnswer, // Include for debugging (don't send to prod frontend)
       })),
     };
   }
@@ -142,30 +157,28 @@ class AttemptService {
     // Determine selected answer from index
     let selectedAnswer;
     let selectedAnswerId;
+    let isCorrect = false;
 
     if (Array.isArray(question.options) && typeof answerIndex === 'number') {
         const option = question.options[answerIndex];
-        if (typeof option === 'object' && option !== null && option.id) {
-            selectedAnswer = option.text;
+        if (typeof option === 'object' && option !== null) {
+            selectedAnswer = option.text || String(option.id);
             selectedAnswerId = option.id;
         } else {
-            selectedAnswer = option;
-            // If options are just strings, we might not have IDs. 
-            // But if we seeded with IDs, we should use them.
+            selectedAnswer = String(option);
+            selectedAnswerId = option;
         }
     } else {
         selectedAnswer = answerData.selectedAnswer; // Fallback
     }
 
     // Check correctness
-    let isCorrect = false;
-    
-    // Case 1: correctAnswer matches the Option ID (e.g., "A")
-    if (selectedAnswerId && question.correctAnswer === selectedAnswerId) {
+    // Case 1: correctAnswer matches the Option ID (e.g., "A", "true", "false")
+    if (selectedAnswerId && String(question.correctAnswer) === String(selectedAnswerId)) {
         isCorrect = true;
     }
     // Case 2: correctAnswer matches the Option Text (legacy/fallback)
-    else if (question.correctAnswer === selectedAnswer) {
+    else if (String(question.correctAnswer) === String(selectedAnswer)) {
         isCorrect = true;
     } 
     // Case 3: correctAnswer matches the index (legacy/fallback)

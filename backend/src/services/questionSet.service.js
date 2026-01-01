@@ -70,7 +70,10 @@ class QuestionSetService {
    */
   async getQuestionSetById(id, userId) {
     const questionSet = await prisma.questionSet.findUnique({
-      where: { id: parseInt(id) },
+      where: { 
+        id: parseInt(id),
+        deletedAt: null // Exclude soft-deleted
+      },
       include: {
         author: {
           select: {
@@ -120,7 +123,7 @@ class QuestionSetService {
   async getQuestionSets(options = {}) {
     const { userId, visibility, authorId, page = 1, limit = 20 } = options;
 
-    const where = {};
+    const where = { deletedAt: null }; // Exclude soft-deleted records
 
     // Visibility filter
     if (visibility) {
@@ -226,7 +229,7 @@ class QuestionSetService {
   }
 
   /**
-   * Delete question set
+   * Delete question set (soft delete)
    */
   async deleteQuestionSet(id, userId) {
     const questionSet = await prisma.questionSet.findUnique({
@@ -242,8 +245,10 @@ class QuestionSetService {
       throw new Error('Access denied');
     }
 
-    await prisma.questionSet.delete({
+    // Soft delete instead of hard delete
+    await prisma.questionSet.update({
       where: { id: parseInt(id) },
+      data: { deletedAt: new Date() },
     });
 
     return { message: 'Question set deleted successfully' };
@@ -369,6 +374,82 @@ class QuestionSetService {
       ...qs,
       questionCount: qs.questionIds.length,
     }));
+  }
+
+  /**
+   * Auto-generate quiz from topic and difficulty
+   * PRD Requirement: Auto-generate quiz from topic + difficulty + numQuestions
+   */
+  async generateQuiz(params, userId) {
+    const { topicId, difficulty, numQuestions = 10, name } = params;
+
+    // Validate parameters
+    if (!topicId) {
+      throw new Error('Topic ID is required');
+    }
+
+    // Build query for questions
+    const where = {
+      status: 'published',
+    };
+
+    // Filter by difficulty if provided
+    if (difficulty) {
+      where.difficulty = difficulty;
+    }
+
+    // Filter by topic
+    where.topics = {
+      some: {
+        topicId: parseInt(topicId),
+      },
+    };
+
+    // Get available questions count
+    const availableCount = await prisma.question.count({ where });
+
+    if (availableCount === 0) {
+      throw new Error('No questions available for the selected criteria');
+    }
+
+    if (availableCount < numQuestions) {
+      throw new Error(
+        `Only ${availableCount} questions available. Requested ${numQuestions}.`
+      );
+    }
+
+    // Fetch all matching questions
+    const allQuestions = await prisma.question.findMany({
+      where,
+      select: { id: true },
+    });
+
+    // Randomly select questions
+    const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+    const selectedQuestions = shuffled.slice(0, numQuestions);
+    const questionIds = selectedQuestions.map((q) => q.id);
+
+    // Get topic name for quiz name
+    const topic = await prisma.topic.findUnique({
+      where: { id: parseInt(topicId) },
+      select: { name: true },
+    });
+
+    // Create the question set
+    const quizName =
+      name ||
+      `${topic?.name || 'Quiz'} - ${difficulty || 'Mixed'} (${numQuestions} questions)`;
+
+    const questionSet = await this.createQuestionSet(
+      {
+        name: quizName,
+        questionIds,
+        visibility: 'private', // Generated quizzes are private by default
+      },
+      userId
+    );
+
+    return questionSet;
   }
 }
 
