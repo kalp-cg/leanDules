@@ -21,6 +21,7 @@ import 'screens/challenge/pending_challenges_screen.dart';
 import 'screens/admin/admin_screen.dart';
 import 'screens/feed/feed_screen.dart';
 import 'screens/onboarding/interests_screen.dart';
+import 'screens/profile/follow_requests_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -92,6 +93,7 @@ class LearnDuelsApp extends ConsumerWidget {
           '/feed': (context) => const FeedScreen(),
           '/interests': (context) => const InterestsScreen(),
           '/create-quiz-set': (context) => const CreateQuizSetScreen(),
+          '/follow-requests': (context) => const FollowRequestsScreen(),
         };
 
         final builder = routes[settings.name];
