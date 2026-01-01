@@ -17,6 +17,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   bool _isLoading = true;
   bool _isFollowing = false;
   bool _isFollowLoading = false;
+  String? _followStatus; // pending, accepted, or null
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         setState(() {
           _userProfile = profile;
           _isFollowing = profile['isFollowing'] ?? false;
+          _followStatus = profile['followStatus']; // Get the follow status
           _isLoading = false;
         });
       }
@@ -54,26 +56,47 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     try {
       final userService = ref.read(userServiceProvider);
       bool success;
+      String message = '';
 
-      if (_isFollowing) {
+      // If already following or request is pending, unfollow/cancel
+      if (_isFollowing || _followStatus == 'pending') {
         success = await userService.unfollowUser(widget.userId);
+        if (_isFollowing) {
+          message = success ? 'Unfollowed user' : 'Error unfollowing';
+        } else {
+          message = success ? 'Request cancelled' : 'Error cancelling request';
+        }
+
+        if (success && mounted) {
+          setState(() {
+            _isFollowing = false;
+            _followStatus = null;
+            if (_userProfile != null && _isFollowing) {
+              final currentCount = _userProfile!['followersCount'] ?? 0;
+              _userProfile!['followersCount'] = currentCount > 0
+                  ? currentCount - 1
+                  : 0;
+            }
+          });
+        }
       } else {
-        success = await userService.followUser(widget.userId);
+        // Send new follow request
+        final result = await userService.followUser(widget.userId);
+        success = result['success'];
+        message = result['message'] ?? 'Follow request sent';
+
+        if (success && mounted) {
+          setState(() {
+            _followStatus = result['status']; // Should be 'pending'
+          });
+        }
       }
 
       if (success && mounted) {
-        setState(() {
-          _isFollowing = !_isFollowing;
-          if (_userProfile != null) {
-            final currentCount = _userProfile!['followersCount'] ?? 0;
-            _userProfile!['followersCount'] = _isFollowing
-                ? currentCount + 1
-                : currentCount - 1;
-          }
-        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isFollowing ? 'Following user' : 'Unfollowed user'),
+            content: Text(message),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -85,6 +108,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       }
     } finally {
       if (mounted) setState(() => _isFollowLoading = false);
+    }
+  }
+
+  String _getFollowButtonText() {
+    if (_isFollowing) {
+      return 'Unfollow';
+    } else if (_followStatus == 'pending') {
+      return 'Cancel Request';
+    } else {
+      return 'Follow';
     }
   }
 
@@ -151,10 +184,12 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
 
           // Follow Button
           CustomButton(
-            text: _isFollowing ? 'Unfollow' : 'Follow',
+            text: _getFollowButtonText(),
             isLoading: _isFollowLoading,
             onPressed: _toggleFollow,
-            backgroundColor: _isFollowing ? Colors.grey : null,
+            backgroundColor: _isFollowing
+                ? Colors.grey
+                : (_followStatus == 'pending' ? Colors.orange : null),
           ),
           const SizedBox(height: 24),
 

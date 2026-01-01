@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -22,6 +24,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late TextEditingController _avatarUrlController;
   bool _isLoading = false;
   File? _selectedImage;
+  Uint8List? _selectedImageBytes; // For web platform
   final ImagePicker _picker = ImagePicker();
 
   final List<String> _avatarSeeds = [
@@ -74,10 +77,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       );
       
       if (image != null) {
-        setState(() {
-          _selectedImage = File(image.path);
-          _avatarUrlController.text = ''; // Clear URL when using local image
-        });
+        // For web, read bytes directly since File doesn't work
+        if (kIsWeb) {
+          final bytes = await image.readAsBytes();
+          setState(() {
+            _selectedImageBytes = bytes;
+            _selectedImage = null;
+            _avatarUrlController.text = ''; // Clear URL when using local image
+          });
+        } else {
+          setState(() {
+            _selectedImage = File(image.path);
+            _selectedImageBytes = null;
+            _avatarUrlController.text = ''; // Clear URL when using local image
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -150,10 +164,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
+      String? avatarUrl = _avatarUrlController.text.trim();
+      
+      // If user picked a local image, upload it first
+      if (_selectedImageBytes != null) {
+        final uploadedUrl = await ref.read(userServiceProvider).uploadAvatar(
+          _selectedImageBytes!,
+          'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        
+        if (uploadedUrl != null) {
+          avatarUrl = uploadedUrl;
+          _avatarUrlController.text = uploadedUrl;
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to upload image')),
+            );
+          }
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
+      
       final success = await ref.read(userServiceProvider).updateProfile({
         'fullName': _fullNameController.text.trim(),
         'bio': _bioController.text.trim(),
-        'avatarUrl': _avatarUrlController.text.trim(),
+        'avatarUrl': avatarUrl,
       });
 
       if (success) {
@@ -162,7 +199,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           
           // Sync avatar with socket server for real-time updates
           ref.read(socketServiceProvider).updateUserProfile(
-            avatarUrl: _avatarUrlController.text.trim(),
+            avatarUrl: avatarUrl,
             fullName: _fullNameController.text.trim(),
           );
           
@@ -254,34 +291,43 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                           ),
                         ),
                         child: ClipOval(
-                          child: _selectedImage != null
-                              ? Image.file(
-                                  _selectedImage!,
+                          child: _selectedImageBytes != null
+                              // Web: use Image.memory with bytes
+                              ? Image.memory(
+                                  _selectedImageBytes!,
                                   fit: BoxFit.cover,
                                   width: 120,
                                   height: 120,
                                 )
-                              : _avatarUrlController.text.isNotEmpty
-                                  ? Image.network(
-                                      _avatarUrlController.text,
+                              : _selectedImage != null
+                                  // Mobile: use Image.file
+                                  ? Image.file(
+                                      _selectedImage!,
                                       fit: BoxFit.cover,
                                       width: 120,
                                       height: 120,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                        child: Icon(
-                                          Icons.person,
-                                          size: 60,
-                                          color: Theme.of(context).colorScheme.primary,
-                                        ),
-                                      ),
                                     )
-                                  : Image.network(
-                                      _getAvatarUrl('Felix'),
-                                      fit: BoxFit.cover,
-                                      width: 120,
-                                      height: 120,
-                                    ),
+                                  : _avatarUrlController.text.isNotEmpty
+                                      ? Image.network(
+                                          _avatarUrlController.text,
+                                          fit: BoxFit.cover,
+                                          width: 120,
+                                          height: 120,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                            child: Icon(
+                                              Icons.person,
+                                              size: 60,
+                                              color: Theme.of(context).colorScheme.primary,
+                                            ),
+                                          ),
+                                        )
+                                      : Image.network(
+                                          _getAvatarUrl('Felix'),
+                                          fit: BoxFit.cover,
+                                          width: 120,
+                                          height: 120,
+                                        ),
                         ),
                       ),
                       Positioned(

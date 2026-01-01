@@ -19,7 +19,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends ConsumerState<ProfileScreen> with AutomaticKeepAliveClientMixin {
+class _ProfileScreenState extends ConsumerState<ProfileScreen>
+    with AutomaticKeepAliveClientMixin {
   Timer? _refreshTimer;
 
   @override
@@ -121,7 +122,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with AutomaticKee
                 }),
                 const SizedBox(height: 8),
                 _buildActionItem('My Vault', Icons.bookmark_rounded, () {
-                   Navigator.push(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const SavedQuestionsScreen(),
@@ -130,7 +131,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with AutomaticKee
                 }),
                 const SizedBox(height: 8),
                 _buildActionItem('My Contributions', Icons.quiz_rounded, () {
-                   Navigator.push(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const MyContributionsScreen(),
@@ -217,7 +218,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with AutomaticKee
           ),
         ),
         const Spacer(),
-        if (isCurrentUser)
+        if (isCurrentUser) ...[
+          IconButton(
+            onPressed: () {
+              Navigator.pushNamed(context, '/follow-requests');
+            },
+            icon: Icon(
+              Icons.person_add_rounded,
+              color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.7),
+            ),
+            tooltip: 'Follow Requests',
+          ),
           IconButton(
             onPressed: () {},
             icon: Icon(
@@ -225,6 +236,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with AutomaticKee
               color: Theme.of(context).iconTheme.color?.withValues(alpha: 0.7),
             ),
           ),
+        ],
       ],
     );
   }
@@ -316,32 +328,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with AutomaticKee
           height: 100,
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(50), // Circular avatar
+            shape: BoxShape.circle,
             border: Border.all(
               color: Theme.of(
                 context,
               ).colorScheme.primary.withValues(alpha: 0.3),
               width: 2,
             ),
-            image: (avatarUrl != null && avatarUrl.isNotEmpty)
-                ? DecorationImage(
-                    image: NetworkImage(avatarUrl),
-                    fit: BoxFit.cover,
-                  )
-                : null,
           ),
-          child: (avatarUrl == null || avatarUrl.isEmpty)
-              ? Center(
-                  child: Text(
-                    username.isNotEmpty ? username[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      fontSize: 42,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.primary,
+          child: ClipOval(
+            child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                ? Image.network(
+                    avatarUrl,
+                    fit: BoxFit.cover,
+                    width: 100,
+                    height: 100,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(
+                        username.isNotEmpty ? username[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          fontSize: 42,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      username.isNotEmpty ? username[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        fontSize: 42,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
-                )
-              : null,
+          ),
         ),
         const SizedBox(height: 20),
         Text(
