@@ -7,11 +7,15 @@ import 'quiz_result_screen.dart';
 class SoloQuizScreen extends ConsumerStatefulWidget {
   final int attemptId;
   final List<dynamic> questions;
+  final int? topicId;
+  final String? difficulty;
 
   const SoloQuizScreen({
     super.key,
     required this.attemptId,
     required this.questions,
+    this.topicId,
+    this.difficulty,
   });
 
   @override
@@ -54,8 +58,8 @@ class _SoloQuizScreenState extends ConsumerState<SoloQuizScreen> {
 
     try {
       final question = widget.questions[_currentQuestionIndex];
-      // Submit answer to backend but don't show result
-      await _attemptService.submitAnswer(
+      // Submit answer to backend and get immediate feedback
+      final result = await _attemptService.submitAnswer(
         widget.attemptId,
         question['id'],
         _selectedAnswerIndex!,
@@ -64,9 +68,16 @@ class _SoloQuizScreenState extends ConsumerState<SoloQuizScreen> {
       if (mounted) {
         setState(() {
           _isSubmitting = false;
+          _answered = true;
+          _isCorrect = result['isCorrect'] ?? false;
         });
-        // Move to next question immediately without showing result
-        _nextQuestion();
+
+        // Show result briefly before moving to next question
+        await Future.delayed(const Duration(milliseconds: 800));
+
+        if (mounted) {
+          _nextQuestion();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -118,6 +129,8 @@ class _SoloQuizScreenState extends ConsumerState<SoloQuizScreen> {
               correct: correct,
               wrong: wrong,
               skipped: skipped,
+              topicId: widget.topicId,
+              difficulty: widget.difficulty,
             ),
           ),
         );
@@ -206,7 +219,14 @@ class _SoloQuizScreenState extends ConsumerState<SoloQuizScreen> {
                     final String optionText = option is Map
                         ? (option['text'] ?? '')
                         : option.toString();
+                    final String optionId = option is Map
+                        ? (option['id']?.toString() ?? '')
+                        : option.toString();
                     final isSelected = _selectedAnswerIndex == index;
+                    final String correctAnswerId =
+                        question['correctAnswer']?.toString() ?? '';
+                    final bool isCorrectOption = optionId == correctAnswerId;
+
                     Color borderColor = Theme.of(context).dividerColor;
                     Color backgroundColor =
                         Theme.of(context).cardTheme.color ??
@@ -214,6 +234,7 @@ class _SoloQuizScreenState extends ConsumerState<SoloQuizScreen> {
 
                     if (_answered) {
                       if (isSelected) {
+                        // User's selected answer
                         borderColor = _isCorrect
                             ? Colors.green
                             : Theme.of(context).colorScheme.error;
@@ -222,8 +243,10 @@ class _SoloQuizScreenState extends ConsumerState<SoloQuizScreen> {
                             : Theme.of(
                                 context,
                               ).colorScheme.error.withValues(alpha: 0.1);
-                      } else if (question['correctAnswer'] == index) {
-                        // Ideally we should show the correct answer if they got it wrong
+                      } else if (isCorrectOption && !_isCorrect) {
+                        // Show correct answer if user got it wrong
+                        borderColor = Colors.green;
+                        backgroundColor = Colors.green.withValues(alpha: 0.1);
                       }
                     } else if (isSelected) {
                       borderColor = Theme.of(context).colorScheme.primary;
@@ -279,10 +302,14 @@ class _SoloQuizScreenState extends ConsumerState<SoloQuizScreen> {
                                 optionText,
                                 style: Theme.of(context).textTheme.bodyLarge
                                     ?.copyWith(
-                                      fontWeight: isSelected
+                                      fontWeight:
+                                          isSelected ||
+                                              (_answered && isCorrectOption)
                                           ? FontWeight.w600
                                           : FontWeight.normal,
-                                      color: isSelected
+                                      color: _answered && isCorrectOption
+                                          ? Colors.green
+                                          : isSelected
                                           ? Theme.of(
                                               context,
                                             ).colorScheme.primary
@@ -299,6 +326,8 @@ class _SoloQuizScreenState extends ConsumerState<SoloQuizScreen> {
                                     ? Colors.green
                                     : Theme.of(context).colorScheme.error,
                               ),
+                            if (_answered && isCorrectOption && !isSelected)
+                              Icon(Icons.check_circle, color: Colors.green),
                           ],
                         ),
                       ),

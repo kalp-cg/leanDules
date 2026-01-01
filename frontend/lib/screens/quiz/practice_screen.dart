@@ -355,6 +355,8 @@ class _PracticeScreenState extends ConsumerState<PracticeScreen> {
             builder: (context) => SoloQuizScreen(
               attemptId: result['attemptId'],
               questions: result['questions'],
+              topicId: selectedTopicId,
+              difficulty: selectedDifficulty,
             ),
           ),
         );

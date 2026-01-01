@@ -6,6 +6,8 @@ class QuizResultScreen extends StatelessWidget {
   final int correct;
   final int wrong;
   final int skipped;
+  final int? topicId;
+  final String? difficulty;
 
   const QuizResultScreen({
     super.key,
@@ -14,6 +16,8 @@ class QuizResultScreen extends StatelessWidget {
     required this.correct,
     required this.wrong,
     required this.skipped,
+    this.topicId,
+    this.difficulty,
   });
 
   @override
@@ -92,6 +96,38 @@ class QuizResultScreen extends StatelessWidget {
                   ],
                 ),
               ),
+
+              const SizedBox(height: 16),
+
+              // Rematch Button (if topicId provided)
+              if (topicId != null)
+                OutlinedButton(
+                  onPressed: () {
+                    // Pop result screen and quiz screen, then navigate back to quiz
+                    Navigator.pop(context); // Close result
+                    Navigator.pop(context); // Close quiz
+                    // Navigate to new practice session
+                    Navigator.pushNamed(context, '/practice');
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    side: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Text(
+                    'Practice Again',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
 
               ElevatedButton(
                 onPressed: () {
