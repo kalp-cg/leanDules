@@ -17,7 +17,7 @@ const getAllUsers = asyncHandler(async (req, res) => {
     search,
     sortBy,
   });
-  
+
   res.json({
     success: true,
     message: 'Users retrieved successfully',
@@ -31,7 +31,7 @@ const getAllUsers = asyncHandler(async (req, res) => {
  */
 const getProfile = asyncHandler(async (req, res) => {
   const profile = await userService.getUserProfile(req.userId);
-  
+
   res.json({
     success: true,
     message: 'Profile retrieved successfully',
@@ -44,7 +44,7 @@ const getProfile = asyncHandler(async (req, res) => {
  */
 const getUserById = asyncHandler(async (req, res) => {
   const profile = await userService.getUserProfile(req.params.id, req.userId);
-  
+
   res.json({
     success: true,
     message: 'User profile retrieved successfully',
@@ -56,16 +56,17 @@ const getUserById = asyncHandler(async (req, res) => {
  * Update user profile (including avatar)
  */
 const updateProfile = asyncHandler(async (req, res) => {
-  const { fullName, bio, username } = req.body;
+  const { fullName, bio, username, avatarUrl } = req.body;
   const avatarFile = req.file; // From multer middleware
-  
+
   const updatedProfile = await userService.updateUserProfile(req.userId, {
     fullName,
     bio,
     username,
-    avatarFile,
+    avatarUrl,  // Support direct URL updates
+    avatarFile, // Support file uploads
   });
-  
+
   res.json({
     success: true,
     message: 'Profile updated successfully',
@@ -83,9 +84,9 @@ const uploadAvatar = asyncHandler(async (req, res) => {
       message: 'No image file provided',
     });
   }
-  
+
   const avatarUrl = await userService.uploadAvatar(req.userId, req.file);
-  
+
   res.json({
     success: true,
     message: 'Avatar uploaded successfully',
@@ -98,7 +99,7 @@ const uploadAvatar = asyncHandler(async (req, res) => {
  */
 const deleteAvatar = asyncHandler(async (req, res) => {
   await userService.deleteAvatar(req.userId);
-  
+
   res.json({
     success: true,
     message: 'Avatar deleted successfully',
@@ -106,28 +107,76 @@ const deleteAvatar = asyncHandler(async (req, res) => {
 });
 
 /**
- * Follow a user
+ * Follow a user (send follow request)
  */
 const followUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  await userService.followUser(req.userId, parseInt(id));
-  
+  const result = await userService.followUser(req.userId, parseInt(id));
+
   res.json({
     success: true,
-    message: 'User followed successfully',
+    message: result.message || 'Follow request sent successfully',
+    data: {
+      status: 'pending',
+      message: result.message
+    }
   });
 });
 
 /**
- * Unfollow a user
+ * Unfollow a user or cancel follow request
  */
 const unfollowUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  await userService.unfollowUser(req.userId, parseInt(id));
-  
+  const result = await userService.unfollowUser(req.userId, parseInt(id));
+
   res.json({
     success: true,
-    message: 'User unfollowed successfully',
+    message: result.message || 'Unfollowed successfully',
+  });
+});
+
+/**
+ * Accept follow request
+ */
+const acceptFollowRequest = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const result = await userService.acceptFollowRequest(req.userId, parseInt(id));
+
+  res.json({
+    success: true,
+    message: result.message || 'Follow request accepted',
+  });
+});
+
+/**
+ * Decline follow request
+ */
+const declineFollowRequest = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const result = await userService.declineFollowRequest(req.userId, parseInt(id));
+
+  res.json({
+    success: true,
+    message: result.message || 'Follow request declined',
+  });
+});
+
+/**
+ * Get pending follow requests
+ */
+const getPendingFollowRequests = asyncHandler(async (req, res) => {
+  const { page, limit } = req.query;
+  const result = await userService.getPendingFollowRequests(req.userId, {
+    page: parseInt(page) || 1,
+    limit: parseInt(limit) || 20,
+  });
+
+  res.json({
+    success: true,
+    message: 'Follow requests retrieved successfully',
+    data: result.requests,
+    pagination: result.pagination,
   });
 });
 
@@ -135,13 +184,15 @@ const unfollowUser = asyncHandler(async (req, res) => {
  * Get user's followers
  */
 const getFollowers = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const followers = await userService.getFollowers(parseInt(id));
-  
+  // Use req.params.id for /:id/followers routes, fallback to req.userId for /me/followers
+  const id = req.params.id || req.userId;
+  const result = await userService.getFollowers(parseInt(id));
+
   res.json({
     success: true,
     message: 'Followers retrieved successfully',
-    data: followers,
+    // Flatten the response - extract followers array directly if it exists
+    data: result.followers || result,
   });
 });
 
@@ -149,13 +200,15 @@ const getFollowers = asyncHandler(async (req, res) => {
  * Get users that a user is following
  */
 const getFollowing = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const following = await userService.getFollowing(parseInt(id));
-  
+  // Use req.params.id for /:id/following routes, fallback to req.userId for /me/following
+  const id = req.params.id || req.userId;
+  const result = await userService.getFollowing(parseInt(id));
+
   res.json({
     success: true,
     message: 'Following retrieved successfully',
-    data: following,
+    // Flatten the response - extract `following` array directly if it exists
+    data: result.following || result,
   });
 });
 
@@ -165,7 +218,7 @@ const getFollowing = asyncHandler(async (req, res) => {
 const searchUsers = asyncHandler(async (req, res) => {
   const { query } = req.query;
   const users = await userService.searchUsers(query, req.userId);
-  
+
   res.json({
     success: true,
     message: 'Search results retrieved successfully',
@@ -182,6 +235,9 @@ module.exports = {
   deleteAvatar,
   followUser,
   unfollowUser,
+  acceptFollowRequest,
+  declineFollowRequest,
+  getPendingFollowRequests,
   getFollowers,
   getFollowing,
   searchUsers,

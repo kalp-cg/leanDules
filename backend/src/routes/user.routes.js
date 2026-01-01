@@ -70,6 +70,15 @@ router.get(
   userController.searchUsers
 );
 
+// GET /api/users/follow-requests - Get pending follow requests (MUST be before /:id routes)
+router.get(
+  '/follow-requests',
+  authenticateToken,
+  [...commonValidation.pagination],
+  handleValidationErrors,
+  userController.getPendingFollowRequests
+);
+
 // GET /api/users/:id - Get user profile by ID
 router.get(
   '/:id',
@@ -132,6 +141,32 @@ router.delete(
   ],
   handleValidationErrors,
   userController.unfollowUser
+);
+
+// POST /api/users/:id/follow/accept - Accept follow request
+router.post(
+  '/:id/follow/accept',
+  authenticateToken,
+  [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('Valid user ID is required'),
+  ],
+  handleValidationErrors,
+  userController.acceptFollowRequest
+);
+
+// POST /api/users/:id/follow/decline - Decline follow request
+router.post(
+  '/:id/follow/decline',
+  authenticateToken,
+  [
+    param('id')
+      .isInt({ min: 1 })
+      .withMessage('Valid user ID is required'),
+  ],
+  handleValidationErrors,
+  userController.declineFollowRequest
 );
 
 // GET /api/users/:id/followers - Get user's followers

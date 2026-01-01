@@ -13,7 +13,9 @@ const { uploadImage, deleteImage, extractPublicId } = require('../config/cloudin
  */
 async function getAllUsers(currentUserId, { page = 1, limit = 20, search = '', sortBy = 'newest' }) {
   try {
-    const skip = (page - 1) * limit;
+    // Cap limit at 5000 to prevent excessive queries
+    const cappedLimit = Math.min(parseInt(limit) || 20, 5000);
+    const skip = (page - 1) * cappedLimit;
     const where = {};
 
     if (search) {
@@ -39,7 +41,7 @@ async function getAllUsers(currentUserId, { page = 1, limit = 20, search = '', s
       prisma.user.findMany({
         where,
         skip,
-        take: limit,
+        take: cappedLimit,
         orderBy,
         select: {
           id: true,
@@ -61,7 +63,7 @@ async function getAllUsers(currentUserId, { page = 1, limit = 20, search = '', s
 
     // Check following status for each user
     const usersWithStatus = await Promise.all(users.map(async (user) => {
-      const isFollowing = await prisma.userFollower.findUnique({
+      const follow = await prisma.userFollower.findUnique({
         where: {
           followerId_followingId: {
             followerId: parseInt(currentUserId),
@@ -71,7 +73,8 @@ async function getAllUsers(currentUserId, { page = 1, limit = 20, search = '', s
       });
       return {
         ...user,
-        isFollowing: !!isFollowing,
+        isFollowing: follow?.status === 'accepted',
+        followStatus: follow?.status || null,
       };
     }));
 
@@ -79,9 +82,9 @@ async function getAllUsers(currentUserId, { page = 1, limit = 20, search = '', s
       users: usersWithStatus,
       pagination: {
         page,
-        limit,
+        limit: cappedLimit,
         total,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil(total / cappedLimit),
       },
     };
   } catch (error) {
@@ -130,6 +133,7 @@ async function getUserProfile(userId, currentUserId = null) {
     }
 
     let isFollowing = false;
+    let followStatus = null;
     if (currentUserId && parseInt(currentUserId) !== parseInt(userId)) {
       const follow = await prisma.userFollower.findUnique({
         where: {
@@ -139,12 +143,16 @@ async function getUserProfile(userId, currentUserId = null) {
           },
         },
       });
-      isFollowing = !!follow;
+      if (follow) {
+        isFollowing = follow.status === 'accepted';
+        followStatus = follow.status; // pending, accepted, or declined
+      }
     }
 
     return {
       ...user,
       isFollowing,
+      followStatus,
     };
   } catch (error) {
     if (error.isOperational) throw error;
@@ -179,7 +187,7 @@ async function updateStreak(userId) {
       // Reset time to midnight for accurate day comparison
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const lastDate = new Date(lastLogin.getFullYear(), lastLogin.getMonth(), lastLogin.getDate());
-      
+
       const diffTime = Math.abs(today - lastDate);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -244,10 +252,12 @@ async function updateProfile(userId, updateData) {
 }
 
 /**
- * Follow a user
+ * Follow a user (Send follow request)
  */
 async function followUser(followerId, followingId) {
   try {
+    console.log(`👥 User ${followerId} attempting to follow user ${followingId}`);
+    
     if (parseInt(followerId) === parseInt(followingId)) {
       throw createError.badRequest('Cannot follow yourself');
     }
@@ -255,6 +265,7 @@ async function followUser(followerId, followingId) {
     // Check if the user to follow exists
     const userToFollow = await prisma.user.findUnique({
       where: { id: parseInt(followingId) },
+      select: { id: true, fullName: true, email: true },
     });
 
     if (!userToFollow) {
@@ -269,44 +280,296 @@ async function followUser(followerId, followingId) {
     });
 
     if (existing) {
-      throw createError.conflict('Already following this user');
+      console.log(`⚠️  Existing follow relationship found: status=${existing.status}`);
+      if (existing.status === 'pending') {
+        throw createError.conflict('Follow request already sent');
+      } else if (existing.status === 'accepted') {
+        throw createError.conflict('Already following this user');
+      } else if (existing.status === 'declined') {
+        // Allow resending after decline
+        await prisma.userFollower.update({
+          where: { id: existing.id },
+          data: { status: 'pending', createdAt: new Date() },
+        });
+        
+        console.log(`✅ Follow request resent (was declined)`);
+        // Send notification
+        await sendFollowRequestNotification(followerId, followingId, userToFollow);
+        return { success: true, message: 'Follow request sent' };
+      }
     }
 
-    await prisma.userFollower.create({
+    // Create pending follow request
+    const followRequest = await prisma.userFollower.create({
       data: {
         followerId: parseInt(followerId),
         followingId: parseInt(followingId),
+        status: 'pending',
       },
     });
 
-    return { success: true };
+    console.log(`✅ Follow request created successfully:`, {
+      id: followRequest.id,
+      follower: followerId,
+      following: followingId,
+      status: followRequest.status
+    });
+
+    // Send notification to the user being followed
+    await sendFollowRequestNotification(followerId, followingId, userToFollow);
+
+    return { success: true, message: 'Follow request sent' };
   } catch (error) {
     if (error.isOperational) throw error;
-    console.error('Follow user error:', error);
-    throw createError.internal('Failed to follow user');
+    console.error('❌ Follow user error:', error);
+    throw createError.internal('Failed to send follow request');
   }
 }
 
 /**
- * Unfollow a user
+ * Send follow request notification
+ */
+async function sendFollowRequestNotification(followerId, followingId, userToFollow) {
+  try {
+    const follower = await prisma.user.findUnique({
+      where: { id: parseInt(followerId) },
+      select: { fullName: true, email: true },
+    });
+
+    // Create notification
+    await prisma.notification.create({
+      data: {
+        userId: parseInt(followingId),
+        type: 'follow_request',
+        message: `${follower?.fullName || 'Someone'} sent you a follow request`,
+        data: {
+          followerId: parseInt(followerId),
+          followerName: follower?.fullName,
+          followerEmail: follower?.email,
+        },
+      },
+    });
+
+    // Send real-time notification via socket
+    try {
+      const { getIO, sendToUser } = require('../sockets/index');
+      const io = getIO();
+      sendToUser(io, followingId, 'notification', {
+        type: 'follow_request',
+        message: `${follower?.fullName || 'Someone'} sent you a follow request`,
+        followerId: parseInt(followerId),
+      });
+    } catch (socketError) {
+      console.error('Failed to send socket notification:', socketError);
+    }
+  } catch (error) {
+    console.error('Failed to send follow request notification:', error);
+  }
+}
+
+/**
+ * Accept follow request
+ */
+async function acceptFollowRequest(userId, followerId) {
+  try {
+    const followRequest = await prisma.userFollower.findFirst({
+      where: {
+        followerId: parseInt(followerId),
+        followingId: parseInt(userId),
+        status: 'pending',
+      },
+    });
+
+    if (!followRequest) {
+      throw createError.notFound('Follow request not found');
+    }
+
+    // Update status to accepted
+    await prisma.userFollower.update({
+      where: { id: followRequest.id },
+      data: { status: 'accepted' },
+    });
+
+    // Create notification for follower
+    const acceptedBy = await prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+      select: { fullName: true },
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: parseInt(followerId),
+        type: 'follow_accepted',
+        message: `${acceptedBy?.fullName || 'User'} accepted your follow request`,
+        data: { userId: parseInt(userId) },
+      },
+    });
+
+    // Send real-time notification
+    try {
+      const { getIO, sendToUser } = require('../sockets/index');
+      const io = getIO();
+      sendToUser(io, followerId, 'notification', {
+        type: 'follow_accepted',
+        message: `${acceptedBy?.fullName || 'User'} accepted your follow request`,
+        userId: parseInt(userId),
+      });
+    } catch (socketError) {
+      console.error('Failed to send socket notification:', socketError);
+    }
+
+    return { success: true, message: 'Follow request accepted' };
+  } catch (error) {
+    if (error.isOperational) throw error;
+    console.error('Accept follow request error:', error);
+    throw createError.internal('Failed to accept follow request');
+  }
+}
+
+/**
+ * Decline follow request
+ */
+async function declineFollowRequest(userId, followerId) {
+  try {
+    const followRequest = await prisma.userFollower.findFirst({
+      where: {
+        followerId: parseInt(followerId),
+        followingId: parseInt(userId),
+        status: 'pending',
+      },
+    });
+
+    if (!followRequest) {
+      throw createError.notFound('Follow request not found');
+    }
+
+    // Update status to declined (or delete)
+    await prisma.userFollower.update({
+      where: { id: followRequest.id },
+      data: { status: 'declined' },
+    });
+
+    return { success: true, message: 'Follow request declined' };
+  } catch (error) {
+    if (error.isOperational) throw error;
+    console.error('Decline follow request error:', error);
+    throw createError.internal('Failed to decline follow request');
+  }
+}
+
+/**
+ * Get pending follow requests
+ */
+async function getPendingFollowRequests(userId, options = {}) {
+  const { page = 1, limit = 20 } = options;
+  const skip = (page - 1) * limit;
+
+  try {
+    console.log(`📥 Getting pending follow requests for user ${userId}`);
+    
+    const [requests, totalCount] = await Promise.all([
+      prisma.userFollower.findMany({
+        where: {
+          followingId: parseInt(userId),
+          status: 'pending',
+        },
+        include: {
+          follower: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              avatarUrl: true,
+              rating: true,
+            },
+          },
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.userFollower.count({
+        where: {
+          followingId: parseInt(userId),
+          status: 'pending',
+        },
+      }),
+    ]);
+
+    console.log(`✅ Found ${requests.length} pending follow requests for user ${userId}`);
+    console.log(`Request data:`, requests.map(r => ({ id: r.id, follower: r.follower.fullName, status: r.status })));
+
+    return {
+      requests: requests.map((r) => r.follower),
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit),
+      },
+    };
+  } catch (error) {
+    console.error('Get pending follow requests error:', error);
+    throw createError.internal('Failed to fetch follow requests');
+  }
+}
+
+/**
+ * Unfollow a user or cancel follow request
  */
 async function unfollowUser(followerId, followingId) {
   try {
-    await prisma.userFollower.deleteMany({
+    const deleted = await prisma.userFollower.deleteMany({
       where: {
         followerId: parseInt(followerId),
         followingId: parseInt(followingId),
       },
     });
 
-    return { success: true };
+    if (deleted.count === 0) {
+      throw createError.notFound('Follow relationship not found');
+    }
+
+    return { success: true, message: 'Unfollowed successfully' };
   } catch (error) {
+    if (error.isOperational) throw error;
     throw createError.internal('Failed to unfollow user');
   }
 }
 
 /**
- * Get user's followers
+ * Get follow status between two users
+ */
+async function getFollowStatus(requestingUserId, targetUserId) {
+  try {
+    const followRelation = await prisma.userFollower.findFirst({
+      where: {
+        followerId: parseInt(requestingUserId),
+        followingId: parseInt(targetUserId),
+      },
+    });
+
+    if (!followRelation) {
+      return { status: 'not_following', isFollowing: false, isPending: false };
+    }
+
+    if (followRelation.status === 'accepted') {
+      return { status: 'following', isFollowing: true, isPending: false };
+    }
+
+    if (followRelation.status === 'pending') {
+      return { status: 'pending', isFollowing: false, isPending: true };
+    }
+
+    return { status: 'not_following', isFollowing: false, isPending: false };
+  } catch (error) {
+    console.error('Get follow status error:', error);
+    throw createError.internal('Failed to get follow status');
+  }
+}
+
+/**
+ * Get user's followers (only accepted)
  */
 async function getFollowers(userId, options = {}) {
   const { page = 1, limit = 20 } = options;
@@ -315,7 +578,10 @@ async function getFollowers(userId, options = {}) {
   try {
     const [followers, totalCount] = await Promise.all([
       prisma.userFollower.findMany({
-        where: { followingId: parseInt(userId) },
+        where: {
+          followingId: parseInt(userId),
+          status: 'accepted',
+        },
         include: {
           follower: {
             select: {
@@ -331,7 +597,10 @@ async function getFollowers(userId, options = {}) {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.userFollower.count({
-        where: { followingId: parseInt(userId) },
+        where: {
+          followingId: parseInt(userId),
+          status: 'accepted',
+        },
       }),
     ]);
 
@@ -350,7 +619,7 @@ async function getFollowers(userId, options = {}) {
 }
 
 /**
- * Get users that user is following
+ * Get users that user is following (only accepted)
  */
 async function getFollowing(userId, options = {}) {
   const { page = 1, limit = 20 } = options;
@@ -359,7 +628,10 @@ async function getFollowing(userId, options = {}) {
   try {
     const [following, totalCount] = await Promise.all([
       prisma.userFollower.findMany({
-        where: { followerId: parseInt(userId) },
+        where: {
+          followerId: parseInt(userId),
+          status: 'accepted',
+        },
         include: {
           following: {
             select: {
@@ -375,7 +647,10 @@ async function getFollowing(userId, options = {}) {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.userFollower.count({
-        where: { followerId: parseInt(userId) },
+        where: {
+          followerId: parseInt(userId),
+          status: 'accepted',
+        },
       }),
     ]);
 
@@ -481,7 +756,7 @@ async function addXp(userId, amount) {
 
     if (newLevel > user.level) {
       updateData.level = newLevel;
-      
+
       // Create Level Up Activity
       try {
         await feedService.createActivity(userId, 'LEVEL_UP', {
@@ -509,6 +784,19 @@ async function addXp(userId, amount) {
  */
 async function uploadAvatar(userId, file) {
   try {
+    console.log('Uploading avatar for user:', userId);
+    console.log('File details:', {
+      fieldname: file.fieldname,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      hasBuffer: !!file.buffer
+    });
+
+    if (!file.buffer) {
+      throw new Error('File buffer is missing. Make sure multer is configured with memoryStorage.');
+    }
+
     // Get current user to check for existing avatar
     const user = await prisma.user.findUnique({
       where: { id: parseInt(userId) },
@@ -521,6 +809,7 @@ async function uploadAvatar(userId, file) {
       if (publicId) {
         try {
           await deleteImage(publicId);
+          console.log('Deleted old avatar:', publicId);
         } catch (err) {
           console.error('Error deleting old avatar:', err);
         }
@@ -528,7 +817,9 @@ async function uploadAvatar(userId, file) {
     }
 
     // Upload new avatar
+    console.log('Uploading to Cloudinary...');
     const result = await uploadImage(file.buffer, 'avatars', `user_${userId}`);
+    console.log('Upload successful:', result.secure_url);
 
     // Update user in database
     await prisma.user.update({
@@ -575,7 +866,7 @@ async function deleteAvatar(userId) {
  */
 async function updateUserProfile(userId, data) {
   try {
-    const { fullName, bio, username, avatarFile } = data;
+    const { fullName, bio, username, avatarUrl, avatarFile } = data;
     const updateFields = {};
 
     if (fullName !== undefined) updateFields.fullName = fullName;
@@ -596,7 +887,10 @@ async function updateUserProfile(userId, data) {
 
     // Handle avatar upload if file provided
     if (avatarFile) {
-      const avatarUrl = await uploadAvatar(userId, avatarFile);
+      const uploadedAvatarUrl = await uploadAvatar(userId, avatarFile);
+      updateFields.avatarUrl = uploadedAvatarUrl;
+    } else if (avatarUrl !== undefined) {
+      // Support direct URL updates (from Cloudinary or external URLs)
       updateFields.avatarUrl = avatarUrl;
     }
 
@@ -630,6 +924,10 @@ module.exports = {
   updateProfile,
   followUser,
   unfollowUser,
+  acceptFollowRequest,
+  declineFollowRequest,
+  getPendingFollowRequests,
+  getFollowStatus,
   getFollowers,
   getFollowing,
   searchUsers,
