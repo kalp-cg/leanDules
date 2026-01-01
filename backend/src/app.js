@@ -35,6 +35,7 @@ const duelRoutes = require('./routes/duel.routes');
 const feedRoutes = require('./routes/feed.routes');
 const reportRoutes = require('./routes/report.routes');
 const chatRoutes = require('./routes/chat.routes');
+const savedRoutes = require('./routes/saved.routes');
 
 /**
  * Create Express application
@@ -99,6 +100,10 @@ function createApp() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+  // Serve uploaded files statically
+  const path = require('path');
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
   // Health check endpoint
   app.get('/health', (req, res) => {
     res.json({
@@ -153,6 +158,11 @@ function createApp() {
         analytics: '/api/analytics',
         spectate: '/api/spectate',
         gdpr: '/api/gdpr',
+        saved: '/api/saved',
+        duels: '/api/duels',
+        feed: '/api/feed',
+        reports: '/api/reports',
+        chat: '/api/chat',
       },
       timestamp: new Date().toISOString(),
     });
@@ -177,6 +187,7 @@ function createApp() {
   app.use('/api/feed', feedRoutes);
   app.use('/api/reports', reportRoutes);
   app.use('/api/chat', chatRoutes);
+  app.use('/api/saved', savedRoutes);
   // Push notifications merged into notifications route
   app.use('/api/notifications', pushNotificationRoutes);
 

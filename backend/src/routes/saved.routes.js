@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const savedController = require('../controllers/saved.controller');
-const { authenticate } = require('../middleware/auth.middleware');
+const { authenticate } = require('../middlewares/auth.middleware');
 
 router.use(authenticate);
 
