@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,13 +12,14 @@ final friendsProvider = FutureProvider<List<dynamic>>((ref) async {
   return service.getFollowing();
 });
 
-final usersProvider = FutureProvider.family<List<dynamic>, String>((
-  ref,
-  sortBy,
-) async {
+// Provider to fetch all users once
+final allUsersProvider = FutureProvider<List<dynamic>>((ref) async {
   final service = ref.watch(friendServiceProvider);
-  return service.getUsers(sortBy: sortBy);
+  return service.getUsers(sortBy: 'newest', limit: 1000);
 });
+
+// State provider for search query
+final findFriendsSearchQueryProvider = StateProvider<String>((ref) => '');
 
 // Track which users are being followed (for loading state)
 final followingInProgressProvider = StateProvider<Set<int>>((ref) => {});
@@ -43,6 +45,8 @@ class FriendsScreen extends ConsumerStatefulWidget {
 class _FriendsScreenState extends ConsumerState<FriendsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -57,29 +61,44 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
       if (_tabController.index == 0) {
         ref.invalidate(friendsProvider);
       } else {
-        ref.invalidate(usersProvider('newest'));
+        ref.invalidate(allUsersProvider);
       }
     }
+  }
+
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          ref.read(findFriendsSearchQueryProvider.notifier).state = query;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+    _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
   Future<void> _followUser(int userId) async {
     // Add to in-progress set
-    ref.read(followingInProgressProvider.notifier).update((state) => {...state, userId});
-    
+    ref
+        .read(followingInProgressProvider.notifier)
+        .update((state) => {...state, userId});
+
     try {
       await ref.read(friendServiceProvider).followUser(userId);
-      
+
       // Refresh both lists
-      ref.invalidate(usersProvider('newest'));
+      ref.invalidate(allUsersProvider);
       ref.invalidate(friendsProvider);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -119,11 +138,11 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
   Future<void> _unfollowUser(int userId) async {
     try {
       await ref.read(friendServiceProvider).unfollowUser(userId);
-      
+
       // Refresh both lists
       ref.invalidate(friendsProvider);
-      ref.invalidate(usersProvider('newest'));
-      
+      ref.invalidate(allUsersProvider);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -223,7 +242,11 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 48, color: AppTheme.error.withValues(alpha: 0.7)),
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: AppTheme.error.withValues(alpha: 0.7),
+              ),
               const SizedBox(height: 16),
               Text(
                 'Error loading friends',
@@ -232,7 +255,10 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
               const SizedBox(height: 8),
               TextButton(
                 onPressed: () => ref.invalidate(friendsProvider),
-                child: Text('Retry', style: GoogleFonts.outfit(color: AppTheme.primary)),
+                child: Text(
+                  'Retry',
+                  style: GoogleFonts.outfit(color: AppTheme.primary),
+                ),
               ),
             ],
           ),
@@ -282,11 +308,17 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
             OutlinedButton.icon(
               onPressed: () => _tabController.animateTo(1),
               icon: const Icon(Icons.search_rounded),
-              label: Text('Find Friends', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+              label: Text(
+                'Find Friends',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+              ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.primary,
                 side: const BorderSide(color: AppTheme.primary),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
               ),
             ),
           ],
@@ -322,7 +354,10 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
             child: friend['avatarUrl'] != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(14),
-                    child: Image.network(friend['avatarUrl'], fit: BoxFit.cover),
+                    child: Image.network(
+                      friend['avatarUrl'],
+                      fit: BoxFit.cover,
+                    ),
                   )
                 : Center(
                     child: Text(
@@ -385,11 +420,18 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                     },
                     borderRadius: BorderRadius.circular(10),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.flash_on_rounded, size: 16, color: Colors.white),
+                          const Icon(
+                            Icons.flash_on_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'Duel',
@@ -414,9 +456,18 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                     value: 'unfollow',
                     child: Row(
                       children: [
-                        Icon(Icons.person_remove_rounded, color: AppTheme.error, size: 20),
+                        Icon(
+                          Icons.person_remove_rounded,
+                          color: AppTheme.error,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
-                        Text('Unfollow', style: GoogleFonts.outfit(color: AppTheme.textPrimary)),
+                        Text(
+                          'Unfollow',
+                          style: GoogleFonts.outfit(
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -435,57 +486,146 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
   }
 
   Widget _buildFindFriendsList() {
-    final usersAsync = ref.watch(usersProvider('newest'));
+    final searchQuery = ref.watch(findFriendsSearchQueryProvider);
+    final usersAsync = ref.watch(allUsersProvider);
     final followingInProgress = ref.watch(followingInProgressProvider);
 
-    return RefreshIndicator(
-      onRefresh: () async => ref.invalidate(usersProvider('newest')),
-      color: AppTheme.primary,
-      child: usersAsync.when(
-        data: (users) {
-          if (users.isEmpty) {
-            return Center(
-              child: Text(
-                'No users found.',
-                style: GoogleFonts.outfit(color: AppTheme.textSecondary),
+    return Column(
+      children: [
+        // Search Bar
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _searchController,
+            onChanged: _onSearchChanged,
+            style: GoogleFonts.outfit(color: AppTheme.textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Search by name or username...',
+              hintStyle: GoogleFonts.outfit(color: AppTheme.textMuted),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                color: AppTheme.primary,
               ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: users.length,
-            itemBuilder: (context, index) {
-              final user = users[index];
-              return _buildUserCard(user, followingInProgress);
-            },
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppTheme.primary),
-        ),
-        error: (err, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 48, color: AppTheme.error.withValues(alpha: 0.7)),
-              const SizedBox(height: 16),
-              Text(
-                'Error loading users',
-                style: GoogleFonts.outfit(color: AppTheme.textSecondary),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(
+                        Icons.clear_rounded,
+                        color: AppTheme.textMuted,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        _onSearchChanged('');
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: AppTheme.surfaceLight,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
               ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => ref.invalidate(usersProvider('newest')),
-                child: Text('Retry', style: GoogleFonts.outfit(color: AppTheme.primary)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: AppTheme.border.withValues(alpha: 0.3),
+                ),
               ),
-            ],
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
           ),
         ),
-      ),
+        // Users List
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async => ref.invalidate(allUsersProvider),
+            color: AppTheme.primary,
+            child: usersAsync.when(
+              data: (allUsers) {
+                // Filter users based on search query
+                final filteredUsers = searchQuery.isEmpty
+                    ? allUsers
+                    : allUsers.where((user) {
+                        final name = (user['fullName'] ?? '')
+                            .toString()
+                            .toLowerCase();
+                        final username = (user['username'] ?? '')
+                            .toString()
+                            .toLowerCase();
+                        final query = searchQuery.toLowerCase();
+                        return name.contains(query) || username.contains(query);
+                      }).toList();
+
+                if (filteredUsers.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        searchQuery.isEmpty
+                            ? 'No users found.'
+                            : 'No users match \"$searchQuery\"',
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredUsers.length,
+                  itemBuilder: (context, index) {
+                    final user = filteredUsers[index];
+                    return _buildUserCard(user, followingInProgress);
+                  },
+                );
+              },
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: AppTheme.primary),
+              ),
+              error: (err, stack) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: AppTheme.error.withValues(alpha: 0.7),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error loading users',
+                      style: GoogleFonts.outfit(color: AppTheme.textSecondary),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => ref.invalidate(allUsersProvider),
+                      child: Text(
+                        'Retry',
+                        style: GoogleFonts.outfit(color: AppTheme.primary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildUserCard(Map<String, dynamic> user, Set<int> followingInProgress) {
+  Widget _buildUserCard(
+    Map<String, dynamic> user,
+    Set<int> followingInProgress,
+  ) {
     final isFollowing = user['isFollowing'] ?? false;
     final userId = user['id'] as int;
     final isLoading = followingInProgress.contains(userId);
@@ -564,62 +704,81 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen>
                   ),
                 )
               : isFollowing
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.success.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
+              ? GestureDetector(
+                  onTap: () => _unfollowUser(userId),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.success.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppTheme.success.withValues(alpha: 0.3),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.check_rounded, size: 16, color: AppTheme.success),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Following',
-                            style: GoogleFonts.outfit(
-                              color: AppTheme.success,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : Container(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppTheme.accent, Color(0xFF00C7B1)],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_rounded,
+                          size: 16,
+                          color: AppTheme.success,
                         ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => _followUser(userId),
-                          borderRadius: BorderRadius.circular(10),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.person_add_rounded, size: 16, color: Colors.black87),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Follow',
-                                  style: GoogleFonts.outfit(
-                                    color: Colors.black87,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Following',
+                          style: GoogleFonts.outfit(
+                            color: AppTheme.success,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
                           ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.accent, Color(0xFF00C7B1)],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _followUser(userId),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.person_add_rounded,
+                              size: 16,
+                              color: Colors.black87,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Follow',
+                              style: GoogleFonts.outfit(
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
+                  ),
+                ),
         ],
       ),
     );
