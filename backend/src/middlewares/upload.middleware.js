@@ -6,7 +6,7 @@
 const multer = require('multer');
 const path = require('path');
 
-// Configure storage in memory (buffer)
+// Configure storage to use memory (buffer) for direct uploads to Cloudinary
 const storage = multer.memoryStorage();
 
 // File filter for images only
@@ -14,7 +14,7 @@ const imageFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = allowedTypes.test(file.mimetype);
-  
+
   if (extname && mimetype) {
     cb(null, true);
   } else {
@@ -56,5 +56,6 @@ const handleUploadError = (err, req, res, next) => {
 module.exports = {
   uploadSingle: upload.single('avatar'),
   uploadMultiple: upload.array('images', 10),
+  uploadChatImage: upload.single('image'),
   handleUploadError,
 };
